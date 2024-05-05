@@ -10,7 +10,7 @@ const [SHADERS, MIXINS] = await Promise.all([
     'mixins.json',
 ].map(url => fetch(url).then(response => response.json())));
 
-export class MyRenderer extends AbstractRenderer {
+export class FoveatedRenderer extends AbstractRenderer {
 
     constructor(gl, volume, camera, environmentTexture, options = {}) {
         super(gl, volume, camera, environmentTexture, options);
@@ -96,8 +96,8 @@ export class MyRenderer extends AbstractRenderer {
         mat4.invert(matrix, matrix);
         gl.uniformMatrix4fv(uniforms.uMvpInverseMatrix, false, matrix);
 
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        // gl.drawArrays(gl.POINTS, 0, numRays); // TODO: ...
+        // gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.drawArrays(gl.POINTS, 0, 10000);
     }
 
     _integrateFrame() {
