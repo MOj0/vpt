@@ -96,8 +96,7 @@ export class FoveatedRenderer extends AbstractRenderer {
         mat4.invert(matrix, matrix);
         gl.uniformMatrix4fv(uniforms.uMvpInverseMatrix, false, matrix);
 
-        // gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.drawArrays(gl.POINTS, 0, 10000);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
     _integrateFrame() {
@@ -107,14 +106,34 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.useProgram(program);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
+        gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
+        gl.uniform1i(uniforms.uVolume, 0);
+
         gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this._transferFunction);
+        gl.uniform1i(uniforms.uTransferFunction, 1);
+
+        gl.uniform1f(uniforms.uStepSize, 1 / this.steps);
+        gl.uniform1f(uniforms.uOffset, Math.random());
+
+        gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this._frameBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uFrame, 0);
 
-        gl.uniform1i(uniforms.uAccumulator, 0);
-        gl.uniform1i(uniforms.uFrame, 1);
+        const centerMatrix = mat4.fromTranslation(mat4.create(), [-0.5, -0.5, -0.5]);
+        const modelMatrix = this._volumeTransform.globalMatrix;
+        const viewMatrix = this._camera.transform.inverseGlobalMatrix;
+        const projectionMatrix = this._camera.getComponent(PerspectiveCamera).projectionMatrix;
 
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        const matrix = mat4.create();
+        mat4.multiply(matrix, centerMatrix, matrix);
+        mat4.multiply(matrix, modelMatrix, matrix);
+        mat4.multiply(matrix, viewMatrix, matrix);
+        mat4.multiply(matrix, projectionMatrix, matrix);
+        mat4.invert(matrix, matrix);
+        gl.uniformMatrix4fv(uniforms.uMvpInverseMatrix, false, matrix);
+
+        gl.drawArrays(gl.POINTS, 0, 10000);
     }
 
     _renderFrame() {
