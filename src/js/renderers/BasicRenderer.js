@@ -28,6 +28,9 @@ export class BasicRenderer extends AbstractRenderer {
     }
 
     render() {
+        // this._frameBuffer.use(); // NOTE: This is done in the _generateFrame method
+        this._generateFrame();
+
         this._accumulationBuffer.use();
         this._integrateFrame();
         this._accumulationBuffer.swap();
@@ -36,12 +39,40 @@ export class BasicRenderer extends AbstractRenderer {
         this._renderFrame();
     }
 
+    _generateFrame() {
+        const gl = this._gl;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this._frameBuffer.getFramebuffer());
+        gl.viewport(0, 0, this._resolution, this._resolution);
+
+        const { program, uniforms } = this._programs.generate;
+        gl.useProgram(program);
+
+
+        const positionData = new Float32Array(this._resolution * this._resolution * 2);
+        gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, positionData);
+        // return positionData;
+        console.log(positionData);
+        // for (let i = 0; i < pixelData.length; i++) {
+        //     if (pixelData[i] !== 0) {
+        //         console.log('non-zero');
+        //         break;
+        //     }
+        // }
+
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
 
     _integrateFrame() {
         const gl = this._gl;
 
         const { program, uniforms } = this._programs.integrate;
         gl.useProgram(program);
+
+        gl.drawBuffers([
+            gl.COLOR_ATTACHMENT0,
+            gl.COLOR_ATTACHMENT1,
+        ]);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -55,6 +86,13 @@ export class BasicRenderer extends AbstractRenderer {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
         gl.uniform1i(uniforms.uColor, 0);
+
+        // gl.activeTexture(gl.TEXTURE1);
+        // gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
+        // gl.uniform1i(uniforms.uPosition, 1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this._frameBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uPosition, 1);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -75,15 +113,15 @@ export class BasicRenderer extends AbstractRenderer {
             height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            format: gl.RED,
-            iformat: gl.R8,
-            type: gl.UNSIGNED_BYTE,
+            format: gl.RG,
+            iformat: gl.RG32F,
+            type: gl.FLOAT,
         }];
     }
 
     _getAccumulationBufferSpec() {
         const gl = this._gl;
-        return [{
+        const radianceBufferSpec = {
             width: this._resolution,
             height: this._resolution,
             min: gl.NEAREST,
@@ -91,7 +129,22 @@ export class BasicRenderer extends AbstractRenderer {
             format: gl.RGBA,
             iformat: gl.RGBA32F,
             type: gl.FLOAT,
-        }];
+        };
+
+        const radianceBufferSpecVec2 = {
+            width: this._resolution,
+            height: this._resolution,
+            min: gl.NEAREST,
+            mag: gl.NEAREST,
+            format: gl.RG,
+            iformat: gl.RG32F,
+            type: gl.FLOAT,
+        };
+
+        return [
+            radianceBufferSpec,
+            radianceBufferSpecVec2,
+        ];
     }
 
     _getRenderBufferSpec() {
