@@ -16,6 +16,8 @@ export class BasicRenderer extends AbstractRenderer {
         super(gl, volume, camera, environmentTexture, options);
 
         this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.BASIC, MIXINS);
+
+        this._points = [];
     }
 
     destroy() {
@@ -47,11 +49,11 @@ export class BasicRenderer extends AbstractRenderer {
         const { program, uniforms } = this._programs.generate;
         gl.useProgram(program);
 
-
         const positionData = new Float32Array(this._resolution * this._resolution * 2);
         gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, positionData);
+        this._points = positionData;
+        // console.log(positionData);
         // return positionData;
-        console.log(positionData);
         // for (let i = 0; i < pixelData.length; i++) {
         //     if (pixelData[i] !== 0) {
         //         console.log('non-zero');
@@ -71,7 +73,6 @@ export class BasicRenderer extends AbstractRenderer {
 
         gl.drawBuffers([
             gl.COLOR_ATTACHMENT0,
-            gl.COLOR_ATTACHMENT1,
         ]);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -80,21 +81,29 @@ export class BasicRenderer extends AbstractRenderer {
     _renderFrame() {
         const gl = this._gl;
 
-        const { program, uniforms } = this._programs.render;
+        const { program, uniforms, attributes } = this._programs.render;
         gl.useProgram(program);
+
+        // Get attribute location
+        const pointsAttribLocation = attributes.aPosition;
+        gl.enableVertexAttribArray(pointsAttribLocation);
+        // const points = new Float32Array([-0.9, 0, 0, 0.9, 0.9, 0]);
+        const points = this._points;
+        const nPoints = points.length / 2;
+        // console.log(nPoints, points);
+
+        const pointsBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, points, gl.STATIC_DRAW);
+        // Bind the buffer and set attribute pointer
+        gl.vertexAttribPointer(pointsAttribLocation, 2, gl.FLOAT, false, 0, 0);
+        //
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
         gl.uniform1i(uniforms.uColor, 0);
 
-        // gl.activeTexture(gl.TEXTURE1);
-        // gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
-        // gl.uniform1i(uniforms.uPosition, 1);
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, this._frameBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uPosition, 1);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.drawArrays(gl.POINTS, 0, nPoints);
     }
 
     _resetFrame() {
@@ -131,19 +140,8 @@ export class BasicRenderer extends AbstractRenderer {
             type: gl.FLOAT,
         };
 
-        const radianceBufferSpecVec2 = {
-            width: this._resolution,
-            height: this._resolution,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            format: gl.RG,
-            iformat: gl.RG32F,
-            type: gl.FLOAT,
-        };
-
         return [
             radianceBufferSpec,
-            radianceBufferSpecVec2,
         ];
     }
 
