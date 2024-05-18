@@ -7,6 +7,7 @@ import { MCMRenderer } from './MCMRenderer.js';
 import { DOSRenderer } from './DOSRenderer.js';
 import { DepthRenderer } from './DepthRenderer.js';
 import { FoveatedRenderer } from './FoveatedRenderer.js';
+import { BasicRenderer } from './BasicRenderer.js';
 
 export function RendererFactory(which) {
     switch (which) {
@@ -19,6 +20,7 @@ export function RendererFactory(which) {
         case 'dos': return DOSRenderer;
         case 'depth': return DepthRenderer;
         case 'foveated': return FoveatedRenderer;
+        case 'basic': return BasicRenderer;
 
         default: throw new Error('No suitable class');
     }
