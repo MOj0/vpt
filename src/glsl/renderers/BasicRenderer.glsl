@@ -1,18 +1,38 @@
 // #part /glsl/shaders/renderers/BASIC/integrate/vertex
 
 #version 300 es
+
+const vec2 vertices[] = vec2[](
+    vec2(-1, -1),
+    vec2( 3, -1),
+    vec2(-1,  3)
+);
+
+out vec2 vPosition;
+
+void main() {
+    vec2 position = vertices[gl_VertexID];
+    vPosition = position;
+    gl_Position = vec4(position, 0, 1);
+}
+
+// #part /glsl/shaders/renderers/BASIC/integrate/fragment
+
+#version 300 es
 precision mediump float;
 
 #define MAX_LEVELS 3 // Maximum levels of the QuadTree
 #define MAX_NODES 1 + 4 + 16  // TODO: Remember to update this when MAX_LEVELS is changed
 
-out vec2 vPosition;
+in vec2 vPosition;
+
+layout (location = 0) out vec2 oColor;
+layout (location = 1) out vec2 oPosition;
 
 float quadTree[MAX_NODES];
 
 // #link /glsl/mixins/rand
 @rand
-
 
 int startIndexReverseLevel(int negLevel){
     float s = 0.0;
@@ -40,7 +60,7 @@ void initializeQuadTree(int sampleAccuracy) {
             for(int y = 0; y < sampleAccuracy; y++){
                 for(int x = 0; x < sampleAccuracy; x++){
                     vec2 dir = vec2(float(x), -float(y)) / float(sampleAccuracy);
-                    float intensity = 1.0;
+                    float intensity = 0.25; // TODO: Read from texture..
                     sumIntensity += intensity;
                 }
             }
@@ -101,7 +121,7 @@ void main() {
     vec2 position = vec2(0.0);
 
     for (int depth = 1; depth <= MAX_LEVELS; depth++) {
-        float random = fract(cos(float(gl_VertexID) + float(depth) * 0.123) * 43758.5453123);
+        float random = fract(cos(float(vPosition.x + vPosition.y) + float(depth) * 0.123) * 43758.5453123);
 
         vec4 regionImportance = getNodeImportance(currNodeIdx);
         int region = getRegion(regionImportance, random);
@@ -127,49 +147,24 @@ void main() {
         }
     }
 
-    vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
+    vec2 rand_dir = rand(vec2(float(vPosition.x + vPosition.y), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
     position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
 
-    vPosition = position;
-
-    gl_Position = vec4(position, 0, 1);
-    gl_PointSize = 2.0;
-}
-
-// #part /glsl/shaders/renderers/BASIC/integrate/fragment
-
-#version 300 es
-precision mediump float;
-
-in vec2 vPosition;
-
-layout (location = 0) out vec2 oColor;
-layout (location = 1) out vec2 oPosition;
-
-void main() {
-    // oColor = vPosition;
-    oColor = vec2(0.66);
-    // oPosition = vPosition;
-    oPosition = vec2(0.5);
+    // oColor = position * 0.5 + 0.5;
+    oColor = vec2(1.0);
+    oPosition = position;
 }
 
 // #part /glsl/shaders/renderers/BASIC/render/vertex
 
 #version 300 es
 
-const vec2 vertices[] = vec2[](
-    vec2(-1, -1),
-    vec2( 3, -1),
-    vec2(-1,  3)
-);
-
-// in vec2 aPosition;
+in vec2 aPosition;
 
 out vec2 vPosition;
 
 void main() {
-    vec2 position = vertices[gl_VertexID];
-    // vec2 position = aPosition;
+    vec2 position = aPosition;
 
     vPosition = position * 0.5 + 0.5;
     gl_Position = vec4(position, 0, 1);
