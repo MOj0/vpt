@@ -1,3 +1,10 @@
+// TODO:
+// Buffer fotonov: F1, F2, .. -> v bufferju so tudi pozicije pikslov, tako jih lahko izrises
+// lastnosti fotonov iz textur -> buffer
+
+// TODO: (OPTIMIZATION): QuadTree zamenjaj z MipMap-om; za MipMap NE uporabi `gl.generateMipMap()` ampak ga zgeneriraj sam (zdruzi po 4 sosdenje piksle in propagiraj navzgor)
+
+
 // #part /glsl/shaders/renderers/BASIC/generate/vertex
 
 #version 300 es
@@ -95,14 +102,14 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-#define MAX_LEVELS 3 // Maximum levels of the QuadTree
-#define MAX_NODES 1 + 4 + 16  // TODO: Remember to update this when MAX_LEVELS is changed
+#define MAX_LEVELS 4 // Maximum levels of the QuadTree
+#define MAX_NODES 1 + 4 + 16 + 64  // TODO: Remember to update this when MAX_LEVELS is changed
 
 uniform sampler2D uFrame;
 
 in vec2 vPosition;
 
-layout (location = 0) out vec2 oColor;
+layout (location = 0) out vec4 oColor;
 layout (location = 1) out vec2 oPosition;
 
 float quadTree[MAX_NODES];
@@ -125,18 +132,31 @@ int sideCount(){
 void initializeQuadTree(int sampleAccuracy) {
     int index = startIndexReverseLevel(1);
     int nSide = sideCount();
+    int halfSide = int(nSide / 2);
+    int nQuadAreas = int(nSide * nSide / 4);
+
     vec2 topLeft = vec2(-1.0, 1.0);
     vec2 delta = vec2(2.0, -2.0) / float(nSide);
 
-    for(int i = 0; i < nSide; i++){
-        for(int j = 0; j < nSide; j++){
-            vec2 pos = topLeft + vec2(delta.x * float(j), delta.y * float(i));
+    for (int i = 0; i < nQuadAreas; i++) {
+        int initX = i % halfSide;
+        int initY = int(i / halfSide);
+        int xIdx = initX * 2;
+        int yIdx = initY * 2;
+        for (int j = 0; j < 4; j++) {
+            int xOffset = j % 2;
+            int yOffset = int(j / 2);
+            vec2 finalIdx = vec2(float(xIdx + xOffset), float(yIdx + yOffset));
+            vec2 pos = topLeft + finalIdx * delta;
 
             float sumIntensity = 0.0;
-            for(int y = 0; y < sampleAccuracy; y++){
-                for(int x = 0; x < sampleAccuracy; x++){
-                    vec2 dir = vec2(float(x), -float(y)) / float(sampleAccuracy);
-                    float intensity = texture(uFrame, pos + dir).r;
+            for (int y = 0; y < sampleAccuracy; y++) {
+                for (int x = 0; x < sampleAccuracy; x++) {
+                    vec2 offset = vec2(x, y) / float(sampleAccuracy) * delta;
+                    // NOTE: We have to normalize position, since we are sampling a texture
+                    vec2 finalPos = (pos + offset) * 0.5 + 0.5;
+                    float intensity = texture(uFrame, finalPos).r;
+
                     sumIntensity += intensity;
                 }
             }
@@ -146,15 +166,15 @@ void initializeQuadTree(int sampleAccuracy) {
         }
     }
 
-    for(int i = MAX_LEVELS-2; i > 0; i--){
-        int startIdx = startIndexReverseLevel(i);
-        int nQuads = int(pow(4.0, float(i)));
+    for (int reverseLevel = 2; reverseLevel <= MAX_LEVELS; reverseLevel++) {
+        int startIdx = startIndexReverseLevel(reverseLevel);
+        int nQuads = int(pow(4.0, float(MAX_LEVELS - reverseLevel)));
 
-        for(int j = 0; j < nQuads; j++){
+        for (int j = 0; j < nQuads; j++) {
             int nodeIdx = startIdx + j;
 
             float sumIntensity = 0.0;
-            for(int k = 1; k <= 4; k++){
+            for (int k = 1; k <= 4; k++) {
                 sumIntensity += quadTree[nodeIdx * 4 + k];
             }
 
@@ -191,6 +211,8 @@ int getRegion(vec4 regionImportance, float random) {
 }
 
 void main() {
+    // TODO: This is extremely inefficient, it should be a texture (mipmap)
+    // TODO: Increase MAX_LEVELS (once we have mipmap)
     initializeQuadTree(10);
 
     int currNodeIdx = 0;
@@ -226,8 +248,7 @@ void main() {
     vec2 rand_dir = rand(vec2(float(vPosition.x + vPosition.y), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
     position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
 
-    // oColor = position * 0.5 + 0.5;
-    oColor = vec2(1.0);
+    oColor = vec4(1.0);
     oPosition = position;
 }
 
@@ -261,8 +282,6 @@ out vec4 oColor;
 
 void main(){
     vec3 color = texture(uColor, vPosition).rgb;
-    // vec3 color = vec3(0.0, vPosition);
-    // vec3 color = vec3(1.0);
     oColor = vec4(color, 1);
 }
 
@@ -286,8 +305,11 @@ void main() {
 #version 300 es
 precision mediump float;
 
-out float oColor;
+layout (location = 0) out vec4 oColor;
+layout (location = 1) out vec2 oPosition;
 
+// NOTE: This does not really work, since renderer only renders pixels at the given POINTS (aPosition)
 void main() {
-    oColor = 0.0;
+    oColor = vec4(0.0);
+    oPosition = vec2(0.0);
 }

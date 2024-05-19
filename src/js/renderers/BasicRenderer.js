@@ -18,6 +18,8 @@ export class BasicRenderer extends AbstractRenderer {
         this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.BASIC, MIXINS);
 
         this._points = [];
+
+        // this.quadTreeTest();
     }
 
     destroy() {
@@ -29,23 +31,8 @@ export class BasicRenderer extends AbstractRenderer {
         super.destroy();
     }
 
-    render() {
-        // this._frameBuffer.use(); // NOTE: This is done in the _generateFrame method
-        this._generateFrame();
-
-        // this._accumulationBuffer.use(); // NOTE: This is done in the _integrateFrame method
-        this._integrateFrame();
-        this._accumulationBuffer.swap();
-
-        this._renderBuffer.use();
-        this._renderFrame();
-    }
-
     _generateFrame() {
         const gl = this._gl;
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this._frameBuffer.getFramebuffer());
-        gl.viewport(0, 0, this._resolution, this._resolution);
 
         const { program, uniforms } = this._programs.generate;
         gl.useProgram(program);
@@ -80,8 +67,6 @@ export class BasicRenderer extends AbstractRenderer {
 
     _integrateFrame() {
         const gl = this._gl;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this._accumulationBuffer.getWriteFramebuffer());
-        gl.viewport(0, 0, this._resolution, this._resolution);
 
         const { program, uniforms } = this._programs.integrate;
         gl.useProgram(program);
@@ -95,16 +80,10 @@ export class BasicRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT1,
         ]);
 
-        gl.readBuffer(gl.COLOR_ATTACHMENT0);
-        const colorData = new Float32Array(this._resolution * this._resolution * 2);
-        gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, colorData);
-        // console.log("color", colorData[37380]);
-
         gl.readBuffer(gl.COLOR_ATTACHMENT1);
         const positionData = new Float32Array(this._resolution * this._resolution * 2);
         gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, positionData);
         this._points = positionData;
-        // console.log("pos", positionData[37380]);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -142,7 +121,123 @@ export class BasicRenderer extends AbstractRenderer {
         const { program, uniforms } = this._programs.reset;
         gl.useProgram(program);
 
+        gl.drawBuffers([
+            gl.COLOR_ATTACHMENT0,
+            gl.COLOR_ATTACHMENT1,
+        ]);
+
         gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    quadTreeTest() {
+        const MAX_LEVELS = 3;
+        const MAX_NODES = 1 + 4 + 16;
+        const quadTree = Array(MAX_NODES).fill(0.0);
+
+        initializeQuadTree(10);
+
+        function startIndexReverseLevel(negLevel) {
+            var s = 0.0;
+            for (var i = 0; i < MAX_LEVELS - negLevel; i++) {
+                s += Math.pow(4.0, i);
+            }
+            return Math.floor(s);
+        }
+
+        function sideCount() {
+            return Math.floor(Math.sqrt(Math.pow(4.0, (MAX_LEVELS - 1))));
+        }
+
+
+        function initializeQuadTree(sampleAccuracy) {
+            var index = startIndexReverseLevel(1);
+            const nSide = sideCount();
+            const halfSide = Math.floor(nSide / 2);
+            const nQuadAreas = Math.floor(nSide * nSide / 4);
+
+            const topLeftX = -1.0;
+            const topLeftY = 1.0;
+            const deltaX = 2.0 / nSide;
+            const deltaY = -2.0 / nSide;
+
+            for (var i = 0; i < nQuadAreas; i++) {
+                var initX = i % halfSide;
+                var initY = Math.floor(i / halfSide);
+                var xIdx = initX * 2;
+                var yIdx = initY * 2;
+                for (var j = 0; j < 4; j++) {
+                    var xOffset = j % 2
+                    var yOffset = Math.floor(j / 2);
+                    const finalIdxX = xIdx + xOffset;
+                    const finalIdxY = yIdx + yOffset;
+                    const posX = topLeftX + finalIdxX * deltaX;
+                    const posY = topLeftY + finalIdxY * deltaY;
+
+                    var sumIntensity = 0.0;
+                    for (var y = 0; y < sampleAccuracy; y++) {
+                        for (var x = 0; x < sampleAccuracy; x++) {
+                            const offsetX = (x / sampleAccuracy) * deltaX;
+                            const offsetY = (y / sampleAccuracy) * deltaY;
+                            const finalPosX = posX + offsetX;
+                            const finalPosY = posY + offsetY;
+
+                            if (finalPosX > 0.8 && finalPosY < -0.8) {
+                                sumIntensity += 1.0;
+                            } else {
+                                sumIntensity += 0.1;
+                            }
+                            // sumIntensity += 1.0;
+                        }
+                    }
+
+                    quadTree[index] = sumIntensity;
+                    index++;
+                }
+            }
+
+            for (var reverseLevel = 2; reverseLevel <= MAX_LEVELS; reverseLevel++) {
+                const startIdx = startIndexReverseLevel(reverseLevel);
+                const nQuads = Math.floor(Math.pow(4.0, MAX_LEVELS - reverseLevel));
+
+                for (var j = 0; j < nQuads; j++) {
+                    const nodeIdx = startIdx + j;
+
+                    var sumIntensity = 0.0;
+                    for (var k = 1; k <= 4; k++) {
+                        sumIntensity += quadTree[nodeIdx * 4 + k];
+                    }
+
+                    quadTree[nodeIdx] = sumIntensity;
+                }
+            }
+        }
+
+        function getNodeImportance(nodeIndex) {
+            var i1 = quadTree[4 * nodeIndex + 1];
+            var i2 = quadTree[4 * nodeIndex + 2];
+            var i3 = quadTree[4 * nodeIndex + 3];
+            var i4 = quadTree[4 * nodeIndex + 4];
+            var sum = i1 + i2 + i3 + i4;
+
+            if (abs(sum) < 0.001) {
+                return vec4(0.25);
+            }
+
+            return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
+        }
+
+        function getRegion(regionImportance, random) {
+            var cumulativeProbability = 0.0;
+
+            for (var i = 0; i < 4; i++) {
+                cumulativeProbability += regionImportance[i];
+                if (random <= cumulativeProbability) {
+                    return i;
+                }
+            }
+
+            return 0; // Unreachable...
+        }
     }
 
     _getFrameBufferSpec() {
@@ -165,8 +260,8 @@ export class BasicRenderer extends AbstractRenderer {
             height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            format: gl.RG, // TODO: Change this to RGBA...
-            iformat: gl.RG32F,
+            format: gl.RGBA,
+            iformat: gl.RGBA32F,
             type: gl.FLOAT,
         };
 
