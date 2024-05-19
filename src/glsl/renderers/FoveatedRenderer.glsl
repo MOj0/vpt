@@ -1,98 +1,14 @@
-// #part /glsl/shaders/renderers/FOVEATED/generate/vertex
-
-#version 300 es
-
-uniform mat4 uMvpInverseMatrix;
-
-out vec3 vRayFrom;
-out vec3 vRayTo;
-
-// #link /glsl/mixins/unproject
-@unproject
-
-const vec2 vertices[] = vec2[](
-    vec2(-1, -1),
-    vec2( 3, -1),
-    vec2(-1,  3)
-);
-
-void main() {
-    vec2 position = vertices[gl_VertexID];
-    unproject(position, uMvpInverseMatrix, vRayFrom, vRayTo);
-    gl_Position = vec4(position, 0, 1);
-}
-
-// #part /glsl/shaders/renderers/FOVEATED/generate/fragment
-
-#version 300 es
-precision mediump float;
-precision mediump sampler2D;
-precision mediump sampler3D;
-
-uniform sampler3D uVolume;
-uniform sampler2D uTransferFunction;
-uniform float uStepSize;
-uniform float uOffset;
-
-in vec3 vRayFrom;
-in vec3 vRayTo;
-
-out float oColor;
-
-// #link /glsl/mixins/intersectCube
-@intersectCube
-
-vec4 sampleVolumeColor(vec3 position) {
-    vec2 volumeSample = texture(uVolume, position).rg;
-    vec4 transferSample = texture(uTransferFunction, volumeSample);
-    return transferSample;
-    // return texture(uVolume, position);
-}
-
-void main() {
-    // vec3 rayDirection = vRayTo - vRayFrom;
-    // vec2 tbounds = max(intersectCube(vRayFrom, rayDirection), 0.0);
-    // if (tbounds.x >= tbounds.y) {
-    //     oColor = 0.0;
-    // } else {
-    //     vec3 from = mix(vRayFrom, vRayTo, tbounds.x);
-    //     vec3 to = mix(vRayFrom, vRayTo, tbounds.y);
-
-    //     float t = 0.0;
-    //     float val = 0.0;
-    //     float offset = uOffset;
-    //     vec3 pos;
-    //     do {
-    //         pos = mix(from, to, offset);
-    //         val = max(sampleVolumeColor(pos).a, val);
-    //         t += uStepSize;
-    //         offset = mod(offset + uStepSize, 1.0);
-    //     } while (t < 1.0);
-    //     oColor = val;
-    // }
-    oColor = 1.0;
-}
-
 // #part /glsl/shaders/renderers/FOVEATED/integrate/vertex
 
 #version 300 es
 
-uniform mat4 uMvpInverseMatrix;
-uniform sampler2D uFrame;
-
-out vec3 vRayFrom;
-out vec3 vRayTo;
-
 // #link /glsl/mixins/rand
 @rand
 
-#define MAX_LEVELS 4 // Maximum levels of the QuadTree
-#define MAX_NODES 1 + 4 + 16 + 64 // TODO: Remember to update this when MAX_LEVELS is changed
+#define MAX_LEVELS 3 // Maximum levels of the QuadTree
+#define MAX_NODES 1 + 4 + 16 // TODO: Remember to update this when MAX_LEVELS is changed
 
 float quadTree[MAX_NODES];
-
-// #link /glsl/mixins/unproject
-@unproject
 
 
 int startIndexReverseLevel(int negLevel){
@@ -106,7 +22,6 @@ int startIndexReverseLevel(int negLevel){
 int sideCount(){
     return int(sqrt(pow(4.0, float(MAX_LEVELS - 1))));
 }
-
 
 void initializeQuadTree(int sampleAccuracy) {
     int index = startIndexReverseLevel(1);
@@ -122,7 +37,7 @@ void initializeQuadTree(int sampleAccuracy) {
             for(int y = 0; y < sampleAccuracy; y++){
                 for(int x = 0; x < sampleAccuracy; x++){
                     vec2 dir = vec2(float(x), -float(y)) / float(sampleAccuracy);
-                    float intensity = texture(uFrame, pos + dir).r;
+                    float intensity = 1.0;
                     sumIntensity += intensity;
                 }
             }
@@ -212,7 +127,6 @@ void main() {
 
     vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
     position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
-    unproject(position, uMvpInverseMatrix, vRayFrom, vRayTo);
 
     gl_Position = vec4(position, 0, 1);
     gl_PointSize = 2.0;
@@ -222,98 +136,10 @@ void main() {
 
 #version 300 es
 precision mediump float;
-precision mediump sampler2D;
-precision mediump sampler3D;
-
-uniform mat4 uMvpInverseMatrix;
-
-uniform sampler3D uVolume;
-uniform sampler2D uTransferFunction;
-
-uniform float uStepSize;
-uniform float uOffset;
-
-// TODO: What to do with these?
-// uniform sampler2D uAccumulator;
-// uniform sampler2D uFrame;
 
 out float oColor;
 
-// #link /glsl/mixins/rand
-@rand
-
-vec4 sampleVolumeColor(vec3 position) {
-    vec2 volumeSample = texture(uVolume, position).rg;
-    vec4 transferSample = texture(uTransferFunction, volumeSample);
-    return transferSample;
-}
-
 void main() {
-    // vec3 vRayFrom;
-    // vec3 vRayTo;
-    // vec2 position = vec2(0.0);
-    // initializeQuadTree();
-
-    // int currNodeIdx = 0;
-
-    // for (int depth = 0; depth < MAX_LEVELS; depth++) {
-    //     float random = fract(cos(float(depth * 2) + float(depth) * 0.123) * 43758.5453123);
-
-    //     vec4 regionImportance = getNodeImportance(currNodeIdx);
-    //     int region = getRegion(regionImportance, random);
-
-    //     if (region == 0) {
-    //         // Top left quadrant
-    //         position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth + 1));
-    //         currNodeIdx = currNodeIdx * 4 + 1;
-    //     } 
-    //     else if (region == 1) {
-    //         // Top right quadrant
-    //         position = position + vec2(1.0, 1.0) * pow(0.5, float(depth + 1));
-    //         currNodeIdx = currNodeIdx * 4 + 2;
-    //     } 
-    //     else if (region == 2) {
-    //         // Bottom left quadrant
-    //         position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth + 1));
-    //         currNodeIdx = currNodeIdx * 4 + 3;
-    //     } else {
-    //         // Bottom right quadrant
-    //         position = position + vec2(1.0, -1.0) * pow(0.5, float(depth + 1));
-    //         currNodeIdx = currNodeIdx * 4 + 4;
-    //     }
-    // }
-
-    // vec2 rand_dir = rand(vec2(0.2, float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
-    // position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
-
-    // unproject(position, uMvpInverseMatrix, vRayFrom, vRayTo);
-
-    // gl_Position = vec4(position, 0, 1);
-
-
-
-    // vec3 rayDirection = vRayTo - vRayFrom;
-    // vec2 tbounds = max(intersectCube(vRayFrom, rayDirection), 0.0);
-    // if (tbounds.x >= tbounds.y) {
-    //     oColor = 0.0;
-    // } else {
-    //     vec3 from = mix(vRayFrom, vRayTo, tbounds.x);
-    //     vec3 to = mix(vRayFrom, vRayTo, tbounds.y);
-
-    //     float t = 0.0;
-    //     float val = 0.0;
-    //     float offset = uOffset;
-    //     vec3 pos;
-    //     do {
-    //         pos = mix(from, to, offset);
-    //         val = max(sampleVolumeColor(pos).a, val);
-    //         t += uStepSize;
-    //         offset = mod(offset + uStepSize, 1.0);
-    //     } while (t < 1.0);
-    //     oColor = val;
-    // }
-    
-
     oColor = 1.0;
 }
 
