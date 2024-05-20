@@ -77,20 +77,7 @@ export class BasicRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT1,
         ]);
 
-        gl.readBuffer(gl.COLOR_ATTACHMENT1);
-        const positionData = new Float32Array(this._resolution * this._resolution * 2);
-        gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, positionData);
-        // console.log(positionData.length);
-        // 392960, 392961 = 0.5
-        // for (let i = 0; i < positionData.length; i++) {
-        //     if (positionData[i] != 0) {
-        //         console.log(i, positionData[i]);
-        //         break;
-        //     }
-        // }
-
-        const nPoints = 1000;
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.drawArrays(gl.POINTS, 0, 100000);
     }
 
     _renderFrame() {
@@ -107,7 +94,7 @@ export class BasicRenderer extends AbstractRenderer {
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
         gl.uniform1i(uniforms.uPosition, 1);
 
-        gl.drawArrays(gl.POINTS, 0, 7000);
+        gl.drawArrays(gl.POINTS, 0, 100000);
     }
 
     _resetFrame() {

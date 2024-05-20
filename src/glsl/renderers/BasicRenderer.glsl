@@ -1,7 +1,3 @@
-// TODO:
-// Buffer fotonov: F1, F2, .. -> v bufferju so tudi pozicije pikslov, tako jih lahko izrises
-// lastnosti fotonov iz textur -> buffer
-
 // TODO: (OPTIMIZATION): QuadTree zamenjaj z MipMap-om; za MipMap NE uporabi `gl.generateMipMap()` ampak ga zgeneriraj sam (zdruzi po 4 sosdenje piksle in propagiraj navzgor)
 
 
@@ -85,8 +81,8 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-#define MAX_LEVELS 4 // Maximum levels of the QuadTree
-#define MAX_NODES 1 + 4 + 16 + 64  // TODO: Remember to update this when MAX_LEVELS is changed
+#define MAX_LEVELS 3 // Maximum levels of the QuadTree
+#define MAX_NODES 1 + 4 + 16  // TODO: Remember to update this when MAX_LEVELS is changed
 
 uniform sampler2D uFrame;
 
@@ -164,19 +160,17 @@ void initializeQuadTree(int sampleAccuracy) {
 }
 
 vec4 getNodeImportance(int nodeIndex){
-    return vec4(0.25);
+    float i1 = quadTree[4 * nodeIndex + 1];
+    float i2 = quadTree[4 * nodeIndex + 2];
+    float i3 = quadTree[4 * nodeIndex + 3];
+    float i4 = quadTree[4 * nodeIndex + 4];
+    float sum = i1 + i2 + i3 + i4;
 
-    // float i1 = quadTree[4 * nodeIndex + 1];
-    // float i2 = quadTree[4 * nodeIndex + 2];
-    // float i3 = quadTree[4 * nodeIndex + 3];
-    // float i4 = quadTree[4 * nodeIndex + 4];
-    // float sum = i1 + i2 + i3 + i4;
+    if (abs(sum) < 0.001) {
+        return vec4(0.25);
+    }
 
-    // if (abs(sum) < 0.001) {
-    //     return vec4(0.25);
-    // }
-
-    // return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
+    return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
 }
 
 int getRegion(vec4 regionImportance, float random) {
@@ -192,62 +186,51 @@ int getRegion(vec4 regionImportance, float random) {
     return 0; // Unreachable...
 }
 
-// const vec2 vertices[] = vec2[](
-//     vec2(0.1, 0.1),
-//     vec2( 0.5, 0.1),
-//     vec2(0.5, 0.5)
-// );
-
-const vec2 vertices[] = vec2[](
-    vec2(-1, -1),
-    vec2( 3, -1),
-    vec2(-1,  3)
-);
-
-
 void main() {
     // TODO: This is extremely inefficient, it should be a texture (mipmap)
     // TODO: Increase MAX_LEVELS (once we have mipmap)
-    // initializeQuadTree(10);
+    initializeQuadTree(10);
 
-    // int currNodeIdx = 0;
-    // vec2 position = vec2(0.0);
+    int currNodeIdx = 0;
+    vec2 position = vec2(0.0);
 
-    // for (int depth = 1; depth <= MAX_LEVELS; depth++) {
-    //     float random = fract(cos(float(gl_VertexID) + float(depth) * 0.123) * 43758.5453123);
+    for (int depth = 1; depth <= MAX_LEVELS; depth++) {
+        float random = fract(cos(float(gl_VertexID) + float(depth) * 0.123) * 43758.5453123);
 
-    //     vec4 regionImportance = getNodeImportance(currNodeIdx);
-    //     int region = getRegion(regionImportance, random);
-    //     region = 0; // TODO: Delete...
+        vec4 regionImportance = getNodeImportance(currNodeIdx);
+        int region = getRegion(regionImportance, random);
 
-    //     if (region == 0) {
-    //         // Top left quadrant
-    //         position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
-    //         currNodeIdx = currNodeIdx * 4 + 1;
-    //     }
-    //     else if (region == 1) {
-    //         // Top right quadrant
-    //         position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
-    //         currNodeIdx = currNodeIdx * 4 + 2;
-    //     }
-    //     else if (region == 2) {
-    //         // Bottom left quadrant
-    //         position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
-    //         currNodeIdx = currNodeIdx * 4 + 3;
-    //     } else {
-    //         // Bottom right quadrant
-    //         position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
-    //         currNodeIdx = currNodeIdx * 4 + 4;
-    //     }
-    // }
+        if (region == 0) {
+            // Top left quadrant
+            position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
+            currNodeIdx = currNodeIdx * 4 + 1;
+        }
+        else if (region == 1) {
+            // Top right quadrant
+            position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
+            currNodeIdx = currNodeIdx * 4 + 2;
+        }
+        else if (region == 2) {
+            // Bottom left quadrant
+            position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
+            currNodeIdx = currNodeIdx * 4 + 3;
+        } else {
+            // Bottom right quadrant
+            position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
+            currNodeIdx = currNodeIdx * 4 + 4;
+        }
+    }
 
-    // vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
-    // position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
+    vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
+    position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
 
-    vec2 position = vertices[gl_VertexID];
+    vPosition = position; // Send position to the fragment shader, which will write it to the texture
 
-    vPosition = position;
-    gl_Position = vec4(position, 0, 1);
+    // We have to compute the position in which we will render the pixel (the same way as we will do in the render/vertex shader)
+    float y = float(100 * int(float(gl_VertexID) / 100.0)) / 100000.0;
+    float x = float(gl_VertexID% 100) / 100.0;
+    vec2 pos = vec2(x, y) * 2.0 - 1.0;
+    gl_Position = vec4(pos, 0, 1);
 }
 
 // #part /glsl/shaders/renderers/BASIC/integrate/fragment
@@ -264,7 +247,6 @@ layout (location = 1) out vec2 oPosition;
 void main() {
     oColor = vec4(1.0); // TODO: Compute actual color (MCM)
     oPosition = vPosition;
-    // oPosition = vec2(-0.5);
 }
 
 // #part /glsl/shaders/renderers/BASIC/render/vertex
@@ -274,19 +256,18 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uColor;
 uniform sampler2D uPosition;
 
 out vec2 vPosition;
 
 void main() {
-    float y = float(100 * int(float(gl_VertexID) / 100.0)) / 7000.0;
+    float y = float(100 * int(float(gl_VertexID) / 100.0)) / 100000.0;
     float x = float(gl_VertexID% 100) / 100.0;
     vec2 pos = vec2(x, y);
 
     vec2 position = texture(uPosition, pos).xy;
 
-    vPosition = position;
+    vPosition = pos;
     gl_Position = vec4(position, 0, 1);
     gl_PointSize = 2.0;
 }
@@ -298,17 +279,14 @@ precision mediump float;
 precision mediump sampler2D;
 
 uniform sampler2D uColor;
-uniform sampler2D uPosition;
 
 in vec2 vPosition;
 
 out vec4 oColor;
 
 void main(){
-    // vec3 color = texture(uColor, vPosition).rgb;
-    // oColor = vec4(color, 1);
-    // oColor = vec4(0, vPosition, 1.0);
-    oColor = vec4(1.0);
+    vec3 color = texture(uColor, vPosition).rgb;
+    oColor = vec4(color, 1);
 }
 
 // #part /glsl/shaders/renderers/BASIC/reset/vertex
