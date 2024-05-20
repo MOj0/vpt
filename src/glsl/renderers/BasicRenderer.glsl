@@ -82,23 +82,6 @@ void main() {
 
 #version 300 es
 
-const vec2 vertices[] = vec2[](
-    vec2(-1, -1),
-    vec2( 3, -1),
-    vec2(-1,  3)
-);
-
-out vec2 vPosition;
-
-void main() {
-    vec2 position = vertices[gl_VertexID];
-    vPosition = position;
-    gl_Position = vec4(position, 0, 1);
-}
-
-// #part /glsl/shaders/renderers/BASIC/integrate/fragment
-
-#version 300 es
 precision mediump float;
 precision mediump sampler2D;
 
@@ -107,10 +90,7 @@ precision mediump sampler2D;
 
 uniform sampler2D uFrame;
 
-in vec2 vPosition;
-
-layout (location = 0) out vec4 oColor;
-layout (location = 1) out vec2 oPosition;
+out vec2 vPosition;
 
 float quadTree[MAX_NODES];
 
@@ -184,17 +164,19 @@ void initializeQuadTree(int sampleAccuracy) {
 }
 
 vec4 getNodeImportance(int nodeIndex){
-    float i1 = quadTree[4 * nodeIndex + 1];
-    float i2 = quadTree[4 * nodeIndex + 2];
-    float i3 = quadTree[4 * nodeIndex + 3];
-    float i4 = quadTree[4 * nodeIndex + 4];
-    float sum = i1 + i2 + i3 + i4;
+    return vec4(0.25);
 
-    if (abs(sum) < 0.001) {
-        return vec4(0.25);
-    }
+    // float i1 = quadTree[4 * nodeIndex + 1];
+    // float i2 = quadTree[4 * nodeIndex + 2];
+    // float i3 = quadTree[4 * nodeIndex + 3];
+    // float i4 = quadTree[4 * nodeIndex + 4];
+    // float sum = i1 + i2 + i3 + i4;
 
-    return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
+    // if (abs(sum) < 0.001) {
+    //     return vec4(0.25);
+    // }
+
+    // return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
 }
 
 int getRegion(vec4 regionImportance, float random) {
@@ -210,60 +192,101 @@ int getRegion(vec4 regionImportance, float random) {
     return 0; // Unreachable...
 }
 
+// const vec2 vertices[] = vec2[](
+//     vec2(0.1, 0.1),
+//     vec2( 0.5, 0.1),
+//     vec2(0.5, 0.5)
+// );
+
+const vec2 vertices[] = vec2[](
+    vec2(-1, -1),
+    vec2( 3, -1),
+    vec2(-1,  3)
+);
+
+
 void main() {
     // TODO: This is extremely inefficient, it should be a texture (mipmap)
     // TODO: Increase MAX_LEVELS (once we have mipmap)
-    initializeQuadTree(10);
+    // initializeQuadTree(10);
 
-    int currNodeIdx = 0;
-    vec2 position = vec2(0.0);
+    // int currNodeIdx = 0;
+    // vec2 position = vec2(0.0);
 
-    for (int depth = 1; depth <= MAX_LEVELS; depth++) {
-        float random = fract(cos(float(vPosition.x + vPosition.y) + float(depth) * 0.123) * 43758.5453123);
+    // for (int depth = 1; depth <= MAX_LEVELS; depth++) {
+    //     float random = fract(cos(float(gl_VertexID) + float(depth) * 0.123) * 43758.5453123);
 
-        vec4 regionImportance = getNodeImportance(currNodeIdx);
-        int region = getRegion(regionImportance, random);
+    //     vec4 regionImportance = getNodeImportance(currNodeIdx);
+    //     int region = getRegion(regionImportance, random);
+    //     region = 0; // TODO: Delete...
 
-        if (region == 0) {
-            // Top left quadrant
-            position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 1;
-        }
-        else if (region == 1) {
-            // Top right quadrant
-            position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 2;
-        }
-        else if (region == 2) {
-            // Bottom left quadrant
-            position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 3;
-        } else {
-            // Bottom right quadrant
-            position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 4;
-        }
-    }
+    //     if (region == 0) {
+    //         // Top left quadrant
+    //         position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
+    //         currNodeIdx = currNodeIdx * 4 + 1;
+    //     }
+    //     else if (region == 1) {
+    //         // Top right quadrant
+    //         position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
+    //         currNodeIdx = currNodeIdx * 4 + 2;
+    //     }
+    //     else if (region == 2) {
+    //         // Bottom left quadrant
+    //         position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
+    //         currNodeIdx = currNodeIdx * 4 + 3;
+    //     } else {
+    //         // Bottom right quadrant
+    //         position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
+    //         currNodeIdx = currNodeIdx * 4 + 4;
+    //     }
+    // }
 
-    vec2 rand_dir = rand(vec2(float(vPosition.x + vPosition.y), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
-    position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
+    // vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
+    // position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
 
-    oColor = vec4(1.0);
-    oPosition = position;
+    vec2 position = vertices[gl_VertexID];
+
+    vPosition = position;
+    gl_Position = vec4(position, 0, 1);
+}
+
+// #part /glsl/shaders/renderers/BASIC/integrate/fragment
+
+#version 300 es
+precision mediump float;
+precision mediump sampler2D;
+
+in vec2 vPosition;
+
+layout (location = 0) out vec4 oColor;
+layout (location = 1) out vec2 oPosition;
+
+void main() {
+    oColor = vec4(1.0); // TODO: Compute actual color (MCM)
+    oPosition = vPosition;
+    // oPosition = vec2(-0.5);
 }
 
 // #part /glsl/shaders/renderers/BASIC/render/vertex
 
 #version 300 es
 
-in vec2 aPosition;
+precision mediump float;
+precision mediump sampler2D;
+
+uniform sampler2D uColor;
+uniform sampler2D uPosition;
 
 out vec2 vPosition;
 
 void main() {
-    vec2 position = aPosition;
+    float y = float(100 * int(float(gl_VertexID) / 100.0)) / 7000.0;
+    float x = float(gl_VertexID% 100) / 100.0;
+    vec2 pos = vec2(x, y);
 
-    vPosition = position * 0.5 + 0.5;
+    vec2 position = texture(uPosition, pos).xy;
+
+    vPosition = position;
     gl_Position = vec4(position, 0, 1);
     gl_PointSize = 2.0;
 }
@@ -275,14 +298,17 @@ precision mediump float;
 precision mediump sampler2D;
 
 uniform sampler2D uColor;
+uniform sampler2D uPosition;
 
 in vec2 vPosition;
 
 out vec4 oColor;
 
 void main(){
-    vec3 color = texture(uColor, vPosition).rgb;
-    oColor = vec4(color, 1);
+    // vec3 color = texture(uColor, vPosition).rgb;
+    // oColor = vec4(color, 1);
+    // oColor = vec4(0, vPosition, 1.0);
+    oColor = vec4(1.0);
 }
 
 // #part /glsl/shaders/renderers/BASIC/reset/vertex

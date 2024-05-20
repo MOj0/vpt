@@ -17,8 +17,6 @@ export class BasicRenderer extends AbstractRenderer {
 
         this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.BASIC, MIXINS);
 
-        this._points = [];
-
         // this.quadTreeTest();
     }
 
@@ -64,7 +62,6 @@ export class BasicRenderer extends AbstractRenderer {
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-
     _integrateFrame() {
         const gl = this._gl;
 
@@ -83,36 +80,34 @@ export class BasicRenderer extends AbstractRenderer {
         gl.readBuffer(gl.COLOR_ATTACHMENT1);
         const positionData = new Float32Array(this._resolution * this._resolution * 2);
         gl.readPixels(0, 0, this._resolution, this._resolution, gl.RG, gl.FLOAT, positionData);
-        this._points = positionData;
+        // console.log(positionData.length);
+        // 392960, 392961 = 0.5
+        // for (let i = 0; i < positionData.length; i++) {
+        //     if (positionData[i] != 0) {
+        //         console.log(i, positionData[i]);
+        //         break;
+        //     }
+        // }
 
+        const nPoints = 1000;
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
     _renderFrame() {
         const gl = this._gl;
 
-        const { program, uniforms, attributes } = this._programs.render;
+        const { program, uniforms } = this._programs.render;
         gl.useProgram(program);
-
-        // Get attribute location
-        const pointsAttribLocation = attributes.aPosition;
-        gl.enableVertexAttribArray(pointsAttribLocation);
-        // const points = new Float32Array([-0.9, 0, 0, 0.9, 0.9, 0]);
-        const points = this._points;
-        const nPoints = points.length / 2;
-        // console.log(nPoints, points);
-        const pointsBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, points, gl.STATIC_DRAW);
-        // Bind the buffer and set attribute pointer
-        gl.vertexAttribPointer(pointsAttribLocation, 2, gl.FLOAT, false, 0, 0);
-        //
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
         gl.uniform1i(uniforms.uColor, 0);
 
-        gl.drawArrays(gl.POINTS, 0, nPoints);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
+        gl.uniform1i(uniforms.uPosition, 1);
+
+        gl.drawArrays(gl.POINTS, 0, 7000);
     }
 
     _resetFrame() {
