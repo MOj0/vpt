@@ -1,6 +1,3 @@
-// TODO: (OPTIMIZATION): QuadTree zamenjaj z MipMap-om; za MipMap NE uporabi `gl.generateMipMap()` ampak ga zgeneriraj sam (zdruzi po 4 sosdenje piksle in propagiraj navzgor)
-
-
 // #part /glsl/shaders/renderers/BASIC/generate/vertex
 
 #version 300 es
@@ -81,89 +78,18 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-#define MAX_LEVELS 3 // Maximum levels of the QuadTree
-#define MAX_NODES 1 + 4 + 16  // TODO: Remember to update this when MAX_LEVELS is changed
-
 uniform sampler2D uFrame;
 
 out vec2 vPosition;
 
-float quadTree[MAX_NODES];
-
 // #link /glsl/mixins/rand
 @rand
 
-int startIndexReverseLevel(int negLevel){
-    float s = 0.0;
-    for(int i = 0; i < MAX_LEVELS - negLevel; i++){
-        s += pow(4.0, float(i));
-    }
-    return int(s);
-}
-
-int sideCount(){
-    return int(sqrt(pow(4.0, float(MAX_LEVELS - 1))));
-}
-
-void initializeQuadTree(int sampleAccuracy) {
-    int index = startIndexReverseLevel(1);
-    int nSide = sideCount();
-    int halfSide = int(nSide / 2);
-    int nQuadAreas = int(nSide * nSide / 4);
-
-    vec2 topLeft = vec2(-1.0, 1.0);
-    vec2 delta = vec2(2.0, -2.0) / float(nSide);
-
-    for (int i = 0; i < nQuadAreas; i++) {
-        int initX = i % halfSide;
-        int initY = int(i / halfSide);
-        int xIdx = initX * 2;
-        int yIdx = initY * 2;
-        for (int j = 0; j < 4; j++) {
-            int xOffset = j % 2;
-            int yOffset = int(j / 2);
-            vec2 finalIdx = vec2(float(xIdx + xOffset), float(yIdx + yOffset));
-            vec2 pos = topLeft + finalIdx * delta;
-
-            float sumIntensity = 0.0;
-            for (int y = 0; y < sampleAccuracy; y++) {
-                for (int x = 0; x < sampleAccuracy; x++) {
-                    vec2 offset = vec2(x, y) / float(sampleAccuracy) * delta;
-                    // NOTE: We have to normalize position, since we are sampling a texture
-                    vec2 finalPos = (pos + offset) * 0.5 + 0.5;
-                    float intensity = texture(uFrame, finalPos).r;
-
-                    sumIntensity += intensity;
-                }
-            }
-
-            quadTree[index] = sumIntensity;
-            index++;
-        }
-    }
-
-    for (int reverseLevel = 2; reverseLevel <= MAX_LEVELS; reverseLevel++) {
-        int startIdx = startIndexReverseLevel(reverseLevel);
-        int nQuads = int(pow(4.0, float(MAX_LEVELS - reverseLevel)));
-
-        for (int j = 0; j < nQuads; j++) {
-            int nodeIdx = startIdx + j;
-
-            float sumIntensity = 0.0;
-            for (int k = 1; k <= 4; k++) {
-                sumIntensity += quadTree[nodeIdx * 4 + k];
-            }
-
-            quadTree[nodeIdx] = sumIntensity;
-        }
-    }
-}
-
-vec4 getNodeImportance(int nodeIndex){
-    float i1 = quadTree[4 * nodeIndex + 1];
-    float i2 = quadTree[4 * nodeIndex + 2];
-    float i3 = quadTree[4 * nodeIndex + 3];
-    float i4 = quadTree[4 * nodeIndex + 4];
+vec4 getNodeImportance(ivec2 pos, int mipLevel){
+    float i1 = texelFetch(uFrame, pos, mipLevel).r;
+    float i2 = texelFetch(uFrame, pos + ivec2(1, 0), mipLevel).r;
+    float i3 = texelFetch(uFrame, pos + ivec2(0, 1), mipLevel).r;
+    float i4 = texelFetch(uFrame, pos + ivec2(1, 1), mipLevel).r;
     float sum = i1 + i2 + i3 + i4;
 
     if (abs(sum) < 0.001) {
@@ -187,42 +113,32 @@ int getRegion(vec4 regionImportance, float random) {
 }
 
 void main() {
-    // TODO: This is extremely inefficient, it should be a texture (mipmap)
-    // TODO: Increase MAX_LEVELS (once we have mipmap)
-    initializeQuadTree(10);
+    ivec2 currPos = ivec2(0);
 
-    int currNodeIdx = 0;
-    vec2 position = vec2(0.0);
-
-    for (int depth = 1; depth <= MAX_LEVELS; depth++) {
-        float random = fract(cos(float(gl_VertexID) + float(depth) * 0.123) * 43758.5453123);
-
-        vec4 regionImportance = getNodeImportance(currNodeIdx);
+    for (int mipLevel = 8; mipLevel > 0; mipLevel--) {
+        float random = fract(cos(float(gl_VertexID) + float(mipLevel) * 0.123) * 43758.5453123);
+        vec4 regionImportance = getNodeImportance(currPos, mipLevel);
         int region = getRegion(regionImportance, random);
 
         if (region == 0) {
             // Top left quadrant
-            position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 1;
+            currPos = 2 * currPos;
         }
         else if (region == 1) {
             // Top right quadrant
-            position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 2;
+            currPos = 2 * (currPos + ivec2(1, 0));
         }
         else if (region == 2) {
             // Bottom left quadrant
-            position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 3;
+            currPos = 2 * (currPos + ivec2(0, 1));
         } else {
             // Bottom right quadrant
-            position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
-            currNodeIdx = currNodeIdx * 4 + 4;
+            currPos = 2 * (currPos + ivec2(1, 1));
         }
     }
 
-    vec2 rand_dir = rand(vec2(float(gl_VertexID), float(MAX_LEVELS))) * vec2(2.0) - vec2(1.0);
-    position = position + rand_dir * pow(0.5, float(MAX_LEVELS));
+    // position: [0, 512] -> [-1, 1] (clip space)
+    vec2 position = vec2(currPos - ivec2(256)) / 256.0;
 
     vPosition = position; // Send position to the fragment shader, which will write it to the texture
 
