@@ -5,8 +5,6 @@ import { AbstractRenderer } from './AbstractRenderer.js';
 
 import { PerspectiveCamera } from '../PerspectiveCamera.js';
 
-import { SingleBuffer } from '../SingleBuffer.js';
-
 const [SHADERS, MIXINS] = await Promise.all([
     'shaders.json',
     'mixins.json',
@@ -65,9 +63,8 @@ export class BasicRenderer extends AbstractRenderer {
             },
         ]);
 
-        // this._inputBuffer = new SingleBuffer(gl, this._getDataInputBufferSpec());
-
-        this._rand = Math.random();
+        this._rand1 = Math.random();
+        this._rand2 = Math.random();
 
         this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.BASIC, MIXINS);
     }
@@ -133,7 +130,8 @@ export class BasicRenderer extends AbstractRenderer {
         gl.useProgram(program);
 
         gl.uniform1i(uniforms.uLen, GRID_SIZE);
-        gl.uniform1f(uniforms.uRandSeed, this._rand);
+        gl.uniform1f(uniforms.uRandSeed, this._rand1);
+        gl.uniform1f(uniforms.uRandSeed2, this._rand2);
 
         gl.drawBuffers([
             gl.COLOR_ATTACHMENT0,
@@ -158,8 +156,12 @@ export class BasicRenderer extends AbstractRenderer {
         gl.useProgram(program);
 
         gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uColor, 0);
+
+        gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
-        gl.uniform1i(uniforms.uValues, 0);
+        gl.uniform1i(uniforms.uRandomPositionNormalized, 1);
 
         gl.drawArrays(gl.POINTS, 0, BUFFER_SIZE * BUFFER_SIZE);
     }
@@ -210,7 +212,7 @@ export class BasicRenderer extends AbstractRenderer {
             type: gl.FLOAT,
         };
 
-        const colorBufferSpec2 = {
+        const positionBufferSpec = {
             width: BUFFER_SIZE,
             height: BUFFER_SIZE,
             min: gl.NEAREST,
@@ -224,7 +226,7 @@ export class BasicRenderer extends AbstractRenderer {
 
         return [
             colorBufferSpec,
-            colorBufferSpec2,
+            positionBufferSpec,
         ];
     }
 

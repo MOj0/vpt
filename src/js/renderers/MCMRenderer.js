@@ -10,9 +10,6 @@ const [SHADERS, MIXINS] = await Promise.all([
     'mixins.json',
 ].map(url => fetch(url).then(response => response.json())));
 
-
-const BUFFER_SIZE = 512;
-
 export class MCMRenderer extends AbstractRenderer {
 
     constructor(gl, volume, camera, environmentTexture, options = {}) {
@@ -113,7 +110,6 @@ export class MCMRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT1,
             gl.COLOR_ATTACHMENT2,
             gl.COLOR_ATTACHMENT3,
-            gl.COLOR_ATTACHMENT4,
         ]);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -165,9 +161,6 @@ export class MCMRenderer extends AbstractRenderer {
         gl.uniform1ui(uniforms.uMaxBounces, this.bounces);
         gl.uniform1ui(uniforms.uSteps, this.steps);
 
-        const GRID_SIZE = BUFFER_SIZE * 2;
-        gl.uniform1i(uniforms.uGridSize, GRID_SIZE);
-
         const centerMatrix = mat4.fromTranslation(mat4.create(), [-0.5, -0.5, -0.5]);
         const modelMatrix = this._volumeTransform.globalMatrix;
         const viewMatrix = this._camera.transform.inverseGlobalMatrix;
@@ -186,19 +179,9 @@ export class MCMRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT1,
             gl.COLOR_ATTACHMENT2,
             gl.COLOR_ATTACHMENT3,
-            gl.COLOR_ATTACHMENT4,
         ]);
 
-        // gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
-
-        // get the result
-        const results = new Float32Array(this._resolution * this._resolution * 4);
-        gl.readBuffer(gl.COLOR_ATTACHMENT4);
-        gl.readPixels(0, 0, this._resolution, this._resolution, gl.RGBA, gl.FLOAT, results);
-        // print the results
-        console.log(results);
-        console.log("\n");
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
     _renderFrame() {
@@ -209,20 +192,17 @@ export class MCMRenderer extends AbstractRenderer {
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
+
         gl.uniform1i(uniforms.uColor, 0);
 
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[4]);
-        gl.uniform1i(uniforms.uPositionRay, 1);
-
-        gl.drawArrays(gl.POINTS, 0, 128 * 128);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
     _getFrameBufferSpec() {
         const gl = this._gl;
         return [{
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
+            width: this._resolution,
+            height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
             format: gl.RGBA,
@@ -235,60 +215,40 @@ export class MCMRenderer extends AbstractRenderer {
         const gl = this._gl;
 
         const positionBufferSpec = {
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
+            width: this._resolution,
+            height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            wrapS: gl.CLAMP_TO_EDGE,
-            wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
             iformat: gl.RGBA32F,
             type: gl.FLOAT,
         };
 
         const directionBufferSpec = {
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
+            width: this._resolution,
+            height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            wrapS: gl.CLAMP_TO_EDGE,
-            wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
             iformat: gl.RGBA32F,
             type: gl.FLOAT,
         };
 
         const transmittanceBufferSpec = {
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
+            width: this._resolution,
+            height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            wrapS: gl.CLAMP_TO_EDGE,
-            wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
             iformat: gl.RGBA32F,
             type: gl.FLOAT,
         };
 
         const radianceBufferSpec = {
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
+            width: this._resolution,
+            height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            wrapS: gl.CLAMP_TO_EDGE,
-            wrapT: gl.CLAMP_TO_EDGE,
-            format: gl.RGBA,
-            iformat: gl.RGBA32F,
-            type: gl.FLOAT,
-        };
-
-        const rayPositionBufferSpec = {
-            width: BUFFER_SIZE,
-            height: BUFFER_SIZE,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            wrapS: gl.CLAMP_TO_EDGE,
-            wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
             iformat: gl.RGBA32F,
             type: gl.FLOAT,
@@ -299,7 +259,6 @@ export class MCMRenderer extends AbstractRenderer {
             directionBufferSpec,
             transmittanceBufferSpec,
             radianceBufferSpec,
-            rayPositionBufferSpec,
         ];
     }
 }

@@ -78,17 +78,30 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
+@constants
+@random/hash/pcg
+@random/hash/squashlinear
+@random/distribution/uniformcast
+@random/distribution/exponential
+
 uniform int uLen;
+uniform float uRandSeed;
 
 out vec2 vPosition;
+out vec2 vRandomPosition;
 
 void main() {
-    ivec2 texSize = ivec2(uLen); // This is actually gridSize
-    float y = float(gl_VertexID / texSize.x) / float(texSize.y);
-    float x = float(gl_VertexID % texSize.x) / float(texSize.x);
+    ivec2 gridSize = ivec2(uLen);
+    float y = float(gl_VertexID / gridSize.x) / float(gridSize.y);
+    float x = float(gl_VertexID % gridSize.x) / float(gridSize.x);
     vec2 position = vec2(x, y) * 2.0 - 1.0;
 
     vPosition = position * 0.5 + 0.5;
+
+    uint state = hash(uvec3(floatBitsToUint(x), floatBitsToUint(y), floatBitsToUint(uRandSeed)));
+    float randX = float(random_uniform(state));
+    float randY = float(random_uniform(state));
+    vRandomPosition = vec2(randX, randY) * 0.7 + 0.15;
 
     gl_Position = vec4(position, 0, 1);
 }
@@ -99,7 +112,7 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform float uRandSeed;
+uniform float uRandSeed2;
 
 @constants
 @random/hash/pcg
@@ -108,20 +121,18 @@ uniform float uRandSeed;
 @random/distribution/exponential
 
 layout (location = 0) out vec4 oColor;
-layout (location = 1) out vec4 oColor2;
+layout (location = 1) out vec4 oPositionNormalized;
 
 in vec2 vPosition;
+in vec2 vRandomPosition;
 
 void main(){
-    oColor = vec4(0.5);
-    
-    // vec2 coord = gl_FragCoord.xy / vec2(512);
-    // oColor2 = vec4(coord, 0, 1);
-
-    uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+    uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed2)));
     float randX = float(random_uniform(state));
     float randY = float(random_uniform(state));
-    oColor2 = vec4(randX, randY, 0, 1);
+
+    oColor = vec4(randX, randY, 0, 1);
+    oPositionNormalized = vec4(vRandomPosition, 0, 1);
 }
 
 // #part /glsl/shaders/renderers/BASIC/render/vertex
@@ -131,19 +142,24 @@ void main(){
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uValues;
+uniform sampler2D uColor;
+uniform sampler2D uRandomPositionNormalized;
 
 out vec2 vPosition;
 
 void main() {
-    ivec2 texSize = textureSize(uValues, 0);
+    ivec2 texSize = textureSize(uColor, 0);
     float y = float(gl_VertexID / texSize.x) / float(texSize.y);
     float x = float(gl_VertexID % texSize.x) / float(texSize.x);
 
     vec2 positionNormalized = vec2(x, y);
-    vec2 gridPosition = vec2(x, y) * 2.0 - 1.0;
+
+    vec4 uRandomPositionNormalized = texture(uRandomPositionNormalized, positionNormalized);
 
     vPosition = positionNormalized;
+
+    vec2 gridPosition = uRandomPositionNormalized.xy * 2.0 - 1.0;
+
     gl_Position = vec4(gridPosition, 0, 1);
     gl_PointSize = 1.0;
 }
@@ -154,15 +170,14 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uValues;
+uniform sampler2D uColor;
 
 in vec2 vPosition;
 
 out vec4 oColor;
 
 void main(){
-    // vec4 v = texture(uValues, vPosition);
-    oColor = texture(uValues, vPosition);
+    oColor = texture(uColor, vPosition);
 }
 
 // #part /glsl/shaders/renderers/BASIC/reset/vertex

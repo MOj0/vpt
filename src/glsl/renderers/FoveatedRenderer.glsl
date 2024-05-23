@@ -78,82 +78,38 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uFrame;
+@constants
+@random/hash/pcg
+@random/hash/squashlinear
+@random/distribution/uniformcast
+@random/distribution/exponential
+
+uniform int uLen;
+uniform float uRandSeed;
 
 out vec2 vPosition;
-
-// #link /glsl/mixins/rand
-@rand
-
-vec4 getNodeImportance(ivec2 pos, int mipLevel){
-    float i1 = texelFetch(uFrame, pos, mipLevel).r;
-    float i2 = texelFetch(uFrame, pos + ivec2(1, 0), mipLevel).r;
-    float i3 = texelFetch(uFrame, pos + ivec2(0, 1), mipLevel).r;
-    float i4 = texelFetch(uFrame, pos + ivec2(1, 1), mipLevel).r;
-    float sum = i1 + i2 + i3 + i4;
-
-    if (abs(sum) < 0.001) {
-        return vec4(0.25);
-    }
-
-    return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
-}
-
-int getRegion(vec4 regionImportance, float random) {
-    float cumulativeProbability = 0.0;
-
-    for (int i = 0; i < 4; i++) {
-        cumulativeProbability += regionImportance[i];
-        if (random <= cumulativeProbability) {
-            return i;
-        }
-    }
-
-    return 0; // Unreachable...
-}
+out vec2 vRandomPositionNormalized;
 
 void main() {
-    ivec2 currPos = ivec2(0);
+    ivec2 gridSize = ivec2(uLen);
+    float y = float(gl_VertexID / gridSize.x) / float(gridSize.y);
+    float x = float(gl_VertexID % gridSize.x) / float(gridSize.x);
+    vec2 position = vec2(x, y) * 2.0 - 1.0;
 
-    for (int mipLevel = 8; mipLevel > 0; mipLevel--) {
-        float random = fract(cos(float(gl_VertexID) + float(mipLevel) * 0.123) * 43758.5453123);
-        vec4 regionImportance = getNodeImportance(currPos, mipLevel);
-        int region = getRegion(regionImportance, random);
+    vPosition = position;
 
-        if (region == 0) {
-            // Top left quadrant
-            currPos = 2 * currPos;
-        }
-        else if (region == 1) {
-            // Top right quadrant
-            currPos = 2 * (currPos + ivec2(1, 0));
-        }
-        else if (region == 2) {
-            // Bottom left quadrant
-            currPos = 2 * (currPos + ivec2(0, 1));
-        } else {
-            // Bottom right quadrant
-            currPos = 2 * (currPos + ivec2(1, 1));
-        }
-    }
+    uint state = hash(uvec3(floatBitsToUint(x), floatBitsToUint(y), floatBitsToUint(uRandSeed)));
+    float randX = float(random_uniform(state));
+    float randY = float(random_uniform(state));
+    vRandomPositionNormalized = vec2(randX, randY) * 0.7 + 0.15;
 
-    ivec2 texSize = textureSize(uFrame, 0);
-    ivec2 texSizeHalf = texSize / 2;
-
-    // position: [0, size] -> [-1, 1] (clip space)
-    vec2 position = vec2(currPos - texSizeHalf) / vec2(texSizeHalf);
-
-    vPosition = position; // Send position to the fragment shader, which will write it to the texture
-    
-    float y = float(gl_VertexID / texSize.x) / float(texSize.y);
-    float x = float(gl_VertexID % texSize.x) / float(texSize.x);
-    vec2 gridPosition = vec2(x, y) * 2.0 - 1.0;
-    gl_Position = vec4(gridPosition, 0, 1);
+    gl_Position = vec4(position, 0, 1);
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/integrate/fragment
 
 #version 300 es
+
 precision mediump float;
 precision mediump sampler2D;
 precision mediump sampler3D;
@@ -187,7 +143,6 @@ uniform sampler2D uEnvironment;
 
 uniform mat4 uMvpInverseMatrix;
 uniform vec2 uInverseResolution;
-uniform float uRandSeed;
 uniform float uBlur;
 
 uniform float uExtinction;
@@ -195,13 +150,16 @@ uniform float uAnisotropy;
 uniform uint uMaxBounces;
 uniform uint uSteps;
 
+uniform float uRandSeed2;
+
 in vec2 vPosition;
+in vec2 vRandomPositionNormalized;
 
 layout (location = 0) out vec4 oPosition;
 layout (location = 1) out vec4 oDirection;
 layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
-layout (location = 4) out vec2 oPositionRay;
+layout (location = 4) out vec4 oPositionNormalized;
 
 void resetPhoton(inout uint state, inout Photon photon) {
     vec3 from, to;
@@ -249,22 +207,20 @@ float mean3(vec3 v) {
     return dot(v, vec3(1.0 / 3.0));
 }
 
-void main(){
-    vec2 texSize = vec2(textureSize(uPosition, 0)); // All the textures have the same size
-    vec2 texcoord = gl_FragCoord.xy / texSize;
-
+void main() {
     Photon photon;
-    photon.position = texture(uPosition, texcoord).xyz;
-    vec4 directionAndBounces = texture(uDirection, texcoord);
+    // Sample with the grid position
+    vec2 mappedPosition = vPosition * 0.5 + 0.5;
+    photon.position = texture(uPosition, mappedPosition).xyz;
+    vec4 directionAndBounces = texture(uDirection, mappedPosition);
     photon.direction = directionAndBounces.xyz;
     photon.bounces = uint(directionAndBounces.w + 0.5);
-    photon.transmittance = texture(uTransmittance, texcoord).rgb;
-    vec4 radianceAndSamples = texture(uRadiance, texcoord);
+    photon.transmittance = texture(uTransmittance, mappedPosition).rgb;
+    vec4 radianceAndSamples = texture(uRadiance, mappedPosition);
     photon.radiance = radianceAndSamples.rgb;
     photon.samples = uint(radianceAndSamples.w + 0.5);
 
-    vec2 mappedPosition = vPosition * 0.5 + 0.5;
-    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
+    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed2)));
     for (uint i = 0u; i < uSteps; i++) {
         float dist = random_exponential(state, uExtinction);
         photon.position += dist * photon.direction;
@@ -304,11 +260,16 @@ void main(){
         }
     }
 
+    uint state1 = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed2)));
+    float randX = float(random_uniform(state1));
+    float randY = float(random_uniform(state1));
+
     oPosition = vec4(photon.position, 0);
     oDirection = vec4(photon.direction, float(photon.bounces));
     oTransmittance = vec4(photon.transmittance, 0);
-    oRadiance = vec4(photon.radiance, float(photon.samples));
-    oPositionRay = vPosition;
+    // oRadiance = vec4(photon.radiance, float(photon.samples));
+    oRadiance = vec4(randX, randY, 0, 1);
+    oPositionNormalized = vec4(vRandomPositionNormalized, 0, 1);
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/render/vertex
@@ -318,21 +279,26 @@ void main(){
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uPositionRay;
+uniform sampler2D uColor;
+uniform sampler2D uRandomPositionNormalized;
 
-flat out int vIndex;
+out vec2 vPosition;
 
 void main() {
-    ivec2 texSize = textureSize(uPositionRay, 0);
+    ivec2 texSize = textureSize(uColor, 0);
     float y = float(gl_VertexID / texSize.x) / float(texSize.y);
     float x = float(gl_VertexID % texSize.x) / float(texSize.x);
-    vec2 gridPosition = vec2(x, y);
 
-    vec2 position = texture(uPositionRay, gridPosition).xy; // TODO: Check if this works, or use texelFetch
+    vec2 positionNormalized = vec2(x, y);
 
-    vIndex = gl_VertexID;
-    gl_Position = vec4(position, 0, 1);
-    gl_PointSize = 2.0;
+    vec4 uRandomPositionNormalized = texture(uRandomPositionNormalized, positionNormalized);
+
+    vPosition = positionNormalized;
+
+    vec2 gridPosition = uRandomPositionNormalized.xy * 2.0 - 1.0;
+
+    gl_Position = vec4(gridPosition, 0, 1);
+    gl_PointSize = 1.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/render/fragment
@@ -341,19 +307,15 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uRadiance;
+uniform sampler2D uColor;
 
-flat in int vIndex;
+in vec2 vPosition;
 
 out vec4 oColor;
 
 void main(){
-    ivec2 size = textureSize(uRadiance, 0);
-    int x = vIndex % size.x;
-    int y = vIndex / size.y;
-
-    vec3 radiance = texelFetch(uRadiance, ivec2(x, y), 0).rgb;
-    oColor = vec4(radiance, 1);
+    vec3 col = texture(uColor, vPosition).rgb;
+    oColor = vec4(col, 1.0);
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/reset/vertex
@@ -406,7 +368,7 @@ layout (location = 0) out vec4 oPosition;
 layout (location = 1) out vec4 oDirection;
 layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
-layout (location = 4) out vec2 oPositionRay;
+layout (location = 4) out vec4 oPositionNormalized;
 
 void main() {
     Photon photon;
@@ -424,5 +386,5 @@ void main() {
     oDirection = vec4(photon.direction, float(photon.bounces));
     oTransmittance = vec4(photon.transmittance, 0);
     oRadiance = vec4(photon.radiance, float(photon.samples));
-    oPositionRay = vec2(0);
+    oPositionNormalized = vec4(0);
 }
