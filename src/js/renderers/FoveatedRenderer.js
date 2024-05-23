@@ -83,6 +83,16 @@ export class FoveatedRenderer extends AbstractRenderer {
         this._rand2 = Math.random();
 
         this._programs = WebGL.buildPrograms(gl, SHADERS.renderers.FOVEATED, MIXINS);
+
+        this._mx = -1;
+        this._my = -1;
+
+        gl.canvas.addEventListener('pointermove', e => {
+            if (e.altKey) {
+                this._mx = e.offsetX / this._resolution;
+                this._my = 1 - e.offsetY / this._resolution;
+            }
+        });
     }
 
     destroy() {
@@ -92,6 +102,21 @@ export class FoveatedRenderer extends AbstractRenderer {
         });
 
         super.destroy();
+    }
+
+    render() {
+        this._frameBuffer.use();
+        this._generateFrame();
+
+        this._accumulationBuffer.use();
+        this._integrateFrame();
+        this._accumulationBuffer.swap();
+
+        this._renderBuffer.use();
+        this._renderFrame();
+
+        this._mx = -1;
+        this._my = -1;
     }
 
     reset() {
@@ -131,6 +156,8 @@ export class FoveatedRenderer extends AbstractRenderer {
         mat4.multiply(matrix, projectionMatrix, matrix);
         mat4.invert(matrix, matrix);
         gl.uniformMatrix4fv(uniforms.uMvpInverseMatrix, false, matrix);
+
+        gl.uniform2f(uniforms.uMousePos, this._mx, this._my);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -188,7 +215,6 @@ export class FoveatedRenderer extends AbstractRenderer {
         const modelMatrix = this._volumeTransform.globalMatrix;
         const viewMatrix = this._camera.transform.inverseGlobalMatrix;
         const projectionMatrix = this._camera.getComponent(PerspectiveCamera).projectionMatrix;
-
         const matrix = mat4.create();
         mat4.multiply(matrix, centerMatrix, matrix);
         mat4.multiply(matrix, modelMatrix, matrix);

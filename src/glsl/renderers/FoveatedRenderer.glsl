@@ -6,6 +6,7 @@ uniform mat4 uMvpInverseMatrix;
 
 out vec3 vRayFrom;
 out vec3 vRayTo;
+out vec2 vPosition;
 
 // #link /glsl/mixins/unproject
 @unproject
@@ -19,6 +20,7 @@ const vec2 vertices[] = vec2[](
 void main() {
     vec2 position = vertices[gl_VertexID];
     unproject(position, uMvpInverseMatrix, vRayFrom, vRayTo);
+    vPosition = position * 0.5 + 0.5;
     gl_Position = vec4(position, 0, 1);
 }
 
@@ -34,8 +36,11 @@ uniform sampler2D uTransferFunction;
 uniform float uStepSize;
 uniform float uOffset;
 
+uniform vec2 uMousePos;
+
 in vec3 vRayFrom;
 in vec3 vRayTo;
+in vec2 vPosition;
 
 out float oColor;
 
@@ -49,6 +54,12 @@ vec4 sampleVolumeColor(vec3 position) {
 }
 
 void main() {
+    // Mouse interaction
+    if (uMousePos.x >= 0.0 && uMousePos.y >= 0.0 && distance(vPosition, uMousePos) < 0.05) {
+        oColor = 5.0;
+        return;
+    }
+
     vec3 rayDirection = vRayTo - vRayFrom;
     vec2 tbounds = max(intersectCube(vRayFrom, rayDirection), 0.0);
     if (tbounds.x >= tbounds.y) {
