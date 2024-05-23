@@ -10,10 +10,14 @@ const [SHADERS, MIXINS] = await Promise.all([
     'mixins.json',
 ].map(url => fetch(url).then(response => response.json())));
 
-export class FoveatedRenderer extends AbstractRenderer {
+const BUFFER_SIZE = 512;
+const GRID_SIZE = BUFFER_SIZE * 2;
+
+export class FoveatedRenderer2 extends AbstractRenderer {
 
     constructor(gl, volume, camera, environmentTexture, options = {}) {
         super(gl, volume, camera, environmentTexture, options);
+
 
         this.registerProperties([
             {
@@ -39,15 +43,8 @@ export class FoveatedRenderer extends AbstractRenderer {
                 min: 0,
             },
             {
-                name: 'stepsMip',
-                label: 'StepsMip',
-                type: 'spinner',
-                value: 1,
-                min: 0,
-            },
-            {
-                name: 'stepsMCM',
-                label: 'StepsMCM',
+                name: 'steps',
+                label: 'Steps',
                 type: 'spinner',
                 value: 8,
                 min: 0,
@@ -60,7 +57,24 @@ export class FoveatedRenderer extends AbstractRenderer {
             },
         ]);
 
-        this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.FOVEATED, MIXINS);
+        this.addEventListener('change', e => {
+            const { name, value } = e.detail;
+
+            if (name === 'transferFunction') {
+                this.setTransferFunction(this.transferFunction);
+            }
+
+            if ([
+                'extinction',
+                'anisotropy',
+                'bounces',
+                'transferFunction',
+            ].includes(name)) {
+                this.reset();
+            }
+        });
+
+        this._programs = WebGL.buildPrograms(this._gl, SHADERS.renderers.FOVEATED2, MIXINS);
     }
 
     destroy() {
@@ -73,8 +87,8 @@ export class FoveatedRenderer extends AbstractRenderer {
     }
 
     render() {
-        this._frameBuffer.use();
-        this._generateFrame();
+        // this._frameBuffer.use();
+        // this._generateFrame();
 
         this._accumulationBuffer.use();
         this._integrateFrame();
@@ -123,38 +137,34 @@ export class FoveatedRenderer extends AbstractRenderer {
         const { program, uniforms } = this._programs.integrate;
         gl.useProgram(program);
 
+
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this._frameBuffer.getAttachments().color[0]);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.uniform1i(uniforms.uFrame, 0);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uPosition, 0);
 
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uPosition, 1);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
+        gl.uniform1i(uniforms.uDirection, 1);
 
         gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
-        gl.uniform1i(uniforms.uDirection, 2);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[2]);
+        gl.uniform1i(uniforms.uTransmittance, 2);
 
         gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[2]);
-        gl.uniform1i(uniforms.uTransmittance, 3);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
+        gl.uniform1i(uniforms.uRadiance, 3);
 
         gl.activeTexture(gl.TEXTURE4);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
-        gl.uniform1i(uniforms.uRadiance, 4);
+        gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
+        gl.uniform1i(uniforms.uVolume, 4);
 
         gl.activeTexture(gl.TEXTURE5);
-        gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
-        gl.uniform1i(uniforms.uVolume, 5);
+        gl.bindTexture(gl.TEXTURE_2D, this._environmentTexture);
+        gl.uniform1i(uniforms.uEnvironment, 5);
 
         gl.activeTexture(gl.TEXTURE6);
-        gl.bindTexture(gl.TEXTURE_2D, this._environmentTexture);
-        gl.uniform1i(uniforms.uEnvironment, 6);
-
-        gl.activeTexture(gl.TEXTURE7);
         gl.bindTexture(gl.TEXTURE_2D, this._transferFunction);
-        gl.uniform1i(uniforms.uTransferFunction, 7);
+        gl.uniform1i(uniforms.uTransferFunction, 6);
 
         gl.uniform2f(uniforms.uInverseResolution, 1 / this._resolution, 1 / this._resolution);
         gl.uniform1f(uniforms.uRandSeed, Math.random());
@@ -163,7 +173,7 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.uniform1f(uniforms.uExtinction, this.extinction);
         gl.uniform1f(uniforms.uAnisotropy, this.anisotropy);
         gl.uniform1ui(uniforms.uMaxBounces, this.bounces);
-        gl.uniform1ui(uniforms.uSteps, this.stepsMCM);
+        gl.uniform1ui(uniforms.uSteps, this.steps);
 
         const centerMatrix = mat4.fromTranslation(mat4.create(), [-0.5, -0.5, -0.5]);
         const modelMatrix = this._volumeTransform.globalMatrix;
@@ -177,6 +187,7 @@ export class FoveatedRenderer extends AbstractRenderer {
         mat4.invert(matrix, matrix);
         gl.uniformMatrix4fv(uniforms.uMvpInverseMatrix, false, matrix);
 
+        gl.uniform1i(uniforms.uLen, GRID_SIZE);
 
         gl.drawBuffers([
             gl.COLOR_ATTACHMENT0,
@@ -186,11 +197,13 @@ export class FoveatedRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT4,
         ]);
 
-        gl.drawArrays(gl.POINTS, 0, this._resolution * this._resolution);
+        gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
 
+        console.log("integrate...");
         // get the result
-        const results = new Float32Array(this._resolution * this._resolution * 4);
-        gl.readPixels(0, 0, this._resolution, this._resolution, gl.RGBA, gl.FLOAT, results);
+        const results = new Float32Array(BUFFER_SIZE * BUFFER_SIZE * 4);
+        gl.readBuffer(gl.COLOR_ATTACHMENT4);
+        gl.readPixels(0, 0, BUFFER_SIZE, BUFFER_SIZE, gl.RGBA, gl.FLOAT, results);
         // print the results
         console.log(results);
         console.log("\n");
@@ -206,11 +219,17 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[4]);
         gl.uniform1i(uniforms.uPositionRay, 0);
 
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
-        gl.uniform1i(uniforms.uRadiance, 1);
+        gl.uniform1i(uniforms.uLen, GRID_SIZE);
 
-        gl.drawArrays(gl.POINTS, 0, 512 * 512);
+        gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
+
+        // // get the result
+        // const results = new Float32Array(BUFFER_SIZE * BUFFER_SIZE * 4);
+        // gl.readBuffer(gl.COLOR_ATTACHMENT0);
+        // gl.readPixels(0, 0, BUFFER_SIZE, BUFFER_SIZE, gl.RGBA, gl.FLOAT, results);
+        // // print the results
+        // console.log(results);
+        // console.log("\n");
     }
 
     _resetFrame() {
@@ -222,9 +241,6 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.drawBuffers([
             gl.COLOR_ATTACHMENT0,
             gl.COLOR_ATTACHMENT1,
-            gl.COLOR_ATTACHMENT2,
-            gl.COLOR_ATTACHMENT3,
-            gl.COLOR_ATTACHMENT4,
         ]);
 
         // gl.clearColor(0, 0, 0, 1);
@@ -250,63 +266,46 @@ export class FoveatedRenderer extends AbstractRenderer {
         const gl = this._gl;
 
         // NOTE: Multiple attachments require SAME DIMENSIONS!
-        const positionBufferSpec = {
-            width: this._resolution,
-            height: this._resolution,
+        const colorBufferSpec = {
+            width: BUFFER_SIZE,
+            height: BUFFER_SIZE,
             min: gl.NEAREST,
             mag: gl.NEAREST,
+            wrapS: gl.CLAMP_TO_EDGE,
+            wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
             iformat: gl.RGBA32F,
-            type: gl.FLOAT,
-        };
-
-        const directionBufferSpec = {
-            width: this._resolution,
-            height: this._resolution,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            format: gl.RGBA,
-            iformat: gl.RGBA32F,
-            type: gl.FLOAT,
-        };
-
-        const transmittanceBufferSpec = {
-            width: this._resolution,
-            height: this._resolution,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            format: gl.RGBA,
-            iformat: gl.RGBA32F,
-            type: gl.FLOAT,
-        };
-
-        const radianceBufferSpec = {
-            width: this._resolution,
-            height: this._resolution,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            format: gl.RGBA,
-            iformat: gl.RGBA32F,
-            type: gl.FLOAT,
-        };
-
-        const rayPositionBufferSpec = {
-            width: this._resolution,
-            height: this._resolution,
-            min: gl.NEAREST,
-            mag: gl.NEAREST,
-            format: gl.RG,
-            iformat: gl.RG32F,
             type: gl.FLOAT,
         };
 
         return [
-            positionBufferSpec,
-            directionBufferSpec,
-            transmittanceBufferSpec,
-            radianceBufferSpec,
-            rayPositionBufferSpec,
+            colorBufferSpec,
+            colorBufferSpec,
+            colorBufferSpec,
+            colorBufferSpec,
+            colorBufferSpec,
         ];
+    }
+
+    _getDataInputBufferSpec() {
+        const gl = this._gl;
+        return [{
+            width: BUFFER_SIZE,
+            height: BUFFER_SIZE,
+            min: gl.NEAREST,
+            mag: gl.NEAREST,
+            wrapS: gl.CLAMP_TO_EDGE,
+            wrapT: gl.CLAMP_TO_EDGE,
+            format: gl.RGBA,
+            iformat: gl.RGBA32F,
+            type: gl.FLOAT,
+            data: new Float32Array([
+                1, 0, 0, 1,
+                0, 1, 0, 1,
+                0, 0, 1, 1,
+                0, 1, 1, 1,
+            ]),
+        }];
     }
 
     _getRenderBufferSpec() {
@@ -319,7 +318,7 @@ export class FoveatedRenderer extends AbstractRenderer {
             wrapS: gl.CLAMP_TO_EDGE,
             wrapT: gl.CLAMP_TO_EDGE,
             format: gl.RGBA,
-            iformat: gl.RGBA16F,
+            iformat: gl.RGBA32F,
             type: gl.FLOAT,
         }];
     }
