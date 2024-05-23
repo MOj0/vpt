@@ -334,8 +334,6 @@ export class FoveatedRenderer2 extends AbstractRenderer {
             type: gl.FLOAT,
         };
 
-        // TODO: Perhaps set wrapS and wrapT
-
         return [
             positionBufferSpec,
             directionBufferSpec,

@@ -147,9 +147,9 @@ layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
 layout (location = 4) out vec2 oPositionNormalized;
 
-void resetPhoton(inout uint state, inout Photon photon) {
+void resetPhoton(inout uint state, in vec2 position, inout Photon photon) {
     vec3 from, to;
-    unprojectRand(state, vPosition, uMvpInverseMatrix, uInverseResolution, uBlur, from, to);
+    unprojectRand(state, position, uMvpInverseMatrix, uInverseResolution, uBlur, from, to);
     photon.direction = normalize(to - from);
     photon.bounces = 0u;
     vec2 tbounds = max(intersectCube(from, photon.direction), 0.0);
@@ -257,13 +257,13 @@ void main() {
             vec3 radiance = photon.transmittance * envSample.rgb;
             photon.samples++;
             photon.radiance += (radiance - photon.radiance) / float(photon.samples);
-            resetPhoton(state, photon);
+            resetPhoton(state, vPosition, photon);
         } else if (fortuneWheel < PAbsorption) {
             // absorption
             vec3 radiance = vec3(0);
             photon.samples++;
             photon.radiance += (radiance - photon.radiance) / float(photon.samples);
-            resetPhoton(state, photon);
+            resetPhoton(state, vPosition, photon);
         } else if (fortuneWheel < PAbsorption + PScattering) {
             // scattering
             photon.transmittance *= volumeSample.rgb;
@@ -279,17 +279,14 @@ void main() {
     oTransmittance = vec4(photon.transmittance, 0);
     oRadiance = vec4(photon.radiance, float(photon.samples));
 
-    ////
-    // uint state2 = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed2)));
-    // float randX = float(random_uniform(state2));
-    // float randY = float(random_uniform(state2));
-    // oPositionNormalized = vec2(randX, randY) * 0.7 + 0.15;
-    ////
+    ivec2 frameSize = textureSize(uFrame, 0);
+    ivec2 frameSizeHalf = frameSize / 2;
+    int maxMipLevel = int(log2(float(frameSizeHalf.x)));
 
     //// Random sampling
     ivec2 currPos = ivec2(0);
     uint state2 = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed2)));
-    for (int mipLevel = 8; mipLevel > 0; mipLevel--) {
+    for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
         float random = random_uniform(state2);
         vec4 regionImportance = getNodeImportance(currPos, mipLevel);
         int region = getRegion(regionImportance, random);
@@ -311,8 +308,6 @@ void main() {
         }
     }
 
-    ivec2 frameSize = textureSize(uFrame, 0);
-    ivec2 frameSizeHalf = frameSize / 2;
     oPositionNormalized = (vec2(currPos - frameSizeHalf) / vec2(frameSizeHalf)) * 0.5 + 0.5;
     ////
 }
@@ -341,7 +336,7 @@ void main() {
 
     vec2 gridPosition = randomPositionNorm * 2.0 - 1.0;
     gl_Position = vec4(gridPosition, 0, 1);
-    gl_PointSize = 4.0;
+    gl_PointSize = 2.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED2/render/fragment
