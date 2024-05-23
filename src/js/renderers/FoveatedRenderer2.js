@@ -19,7 +19,7 @@ export class FoveatedRenderer2 extends AbstractRenderer {
             // MIP
             {
                 name: 'stepsMIP',
-                label: 'Steps',
+                label: 'StepsMIP',
                 type: 'spinner',
                 value: 64,
                 min: 1,
@@ -49,7 +49,7 @@ export class FoveatedRenderer2 extends AbstractRenderer {
             },
             {
                 name: 'stepsMCM',
-                label: 'Steps',
+                label: 'StepsMCM',
                 type: 'spinner',
                 value: 8,
                 min: 0,
@@ -94,6 +94,15 @@ export class FoveatedRenderer2 extends AbstractRenderer {
         super.destroy();
     }
 
+    reset() {
+        this._accumulationBuffer.use();
+        this._resetFrameAccumulation();
+        this._accumulationBuffer.swap();
+
+        this._renderBuffer.use();
+        this._resetFrameRender();
+    }
+
     _generateFrame() {
         const gl = this._gl;
 
@@ -109,7 +118,7 @@ export class FoveatedRenderer2 extends AbstractRenderer {
         gl.uniform1i(uniforms.uTransferFunction, 1);
 
         gl.uniform1f(uniforms.uStepSize, 1 / this.stepsMIP);
-        gl.uniform1f(uniforms.uOffset, Math.random());
+        gl.uniform1f(uniforms.uOffset, this._rand1);
 
         const centerMatrix = mat4.fromTranslation(mat4.create(), [-0.5, -0.5, -0.5]);
         const modelMatrix = this._volumeTransform.globalMatrix;
@@ -214,17 +223,16 @@ export class FoveatedRenderer2 extends AbstractRenderer {
         gl.uniform1i(uniforms.uRandomPositionNormalized, 1);
 
         gl.drawArrays(gl.POINTS, 0, this._resolution * this._resolution);
-        // gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    _resetFrame() {
+    _resetFrameAccumulation() {
         const gl = this._gl;
 
         const { program, uniforms } = this._programs.reset;
         gl.useProgram(program);
 
         gl.uniform2f(uniforms.uInverseResolution, 1 / this._resolution, 1 / this._resolution);
-        gl.uniform1f(uniforms.uRandSeed, Math.random());
+        gl.uniform1f(uniforms.uRandSeed, this._rand1);
         gl.uniform1f(uniforms.uBlur, 0);
 
         const centerMatrix = mat4.fromTranslation(mat4.create(), [-0.5, -0.5, -0.5]);
@@ -245,7 +253,17 @@ export class FoveatedRenderer2 extends AbstractRenderer {
             gl.COLOR_ATTACHMENT1,
             gl.COLOR_ATTACHMENT2,
             gl.COLOR_ATTACHMENT3,
+            gl.COLOR_ATTACHMENT4,
         ]);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    _resetFrameRender() {
+        const gl = this._gl;
+
+        const { program } = this._programs.resetRender;
+        gl.useProgram(program);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }

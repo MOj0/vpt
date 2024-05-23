@@ -341,7 +341,7 @@ void main() {
 
     vec2 gridPosition = randomPositionNorm * 2.0 - 1.0;
     gl_Position = vec4(gridPosition, 0, 1);
-    gl_PointSize = 1.0;
+    gl_PointSize = 4.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED2/render/fragment
@@ -410,6 +410,7 @@ layout (location = 0) out vec4 oPosition;
 layout (location = 1) out vec4 oDirection;
 layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
+layout (location = 4) out vec2 oPositionNormalized;
 
 void main() {
     Photon photon;
@@ -427,4 +428,35 @@ void main() {
     oDirection = vec4(photon.direction, float(photon.bounces));
     oTransmittance = vec4(photon.transmittance, 0);
     oRadiance = vec4(photon.radiance, float(photon.samples));
+    oPositionNormalized = vec2(0);
+}
+
+
+// #part /glsl/shaders/renderers/FOVEATED2/resetRender/vertex
+
+#version 300 es
+
+const vec2 vertices[] = vec2[](
+    vec2(-1, -1),
+    vec2( 3, -1),
+    vec2(-1,  3)
+);
+
+out vec2 vPosition;
+
+void main() {
+    vec2 position = vertices[gl_VertexID];
+    gl_Position = vec4(position, 0, 1);
+}
+
+// #part /glsl/shaders/renderers/FOVEATED2/resetRender/fragment
+
+#version 300 es
+precision mediump float;
+precision mediump sampler2D;
+
+out vec4 oColor;
+
+void main() {
+    oColor = vec4(vec3(0), 1);
 }
