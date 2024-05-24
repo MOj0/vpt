@@ -82,6 +82,108 @@ void main() {
     }
 }
 
+// #part /glsl/shaders/renderers/FOVEATED/compute/vertex
+
+#version 300 es
+
+out vec2 vPosition;
+
+const vec2 vertices[] = vec2[](
+    vec2(-1, -1),
+    vec2( 3, -1),
+    vec2(-1,  3)
+);
+
+void main() {
+    vec2 position = vertices[gl_VertexID];
+    vPosition = position;
+    gl_Position = vec4(position, 0, 1);
+}
+
+// #part /glsl/shaders/renderers/FOVEATED/compute/fragment
+
+#version 300 es
+precision mediump float;
+precision mediump sampler2D;
+
+@constants
+@random/hash/pcg
+@random/hash/squashlinear
+@random/distribution/uniformdivision
+@random/distribution/square
+@random/distribution/disk
+@random/distribution/sphere
+@random/distribution/exponential
+
+uniform sampler2D uFrame;
+uniform float uRandSeed;
+
+in vec2 vPosition;
+
+out vec2 oPositionRender;
+
+vec4 getNodeImportance(ivec2 pos, int mipLevel){
+    float i1 = texelFetch(uFrame, pos, mipLevel).r;
+    float i2 = texelFetch(uFrame, pos + ivec2(1, 0), mipLevel).r;
+    float i3 = texelFetch(uFrame, pos + ivec2(0, 1), mipLevel).r;
+    float i4 = texelFetch(uFrame, pos + ivec2(1, 1), mipLevel).r;
+    float sum = i1 + i2 + i3 + i4;
+
+    if (abs(sum) < 0.001) {
+        return vec4(0.25);
+    }
+
+    return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
+}
+
+int getRegion(vec4 regionImportance, float random) {
+    float cumulativeProbability = 0.0;
+
+    for (int i = 0; i < 4; i++) {
+        cumulativeProbability += regionImportance[i];
+        if (random <= cumulativeProbability) {
+            return i;
+        }
+    }
+
+    return 0; // Unreachable...
+}
+
+// Random sampling
+void main() {
+    ivec2 frameSize = textureSize(uFrame, 0);
+    ivec2 frameSizeHalf = frameSize / 2;
+    int maxMipLevel = int(log2(float(frameSizeHalf.x)));
+
+    vec2 mappedPosition = vPosition * 0.5 + 0.5;
+    ivec2 currPos = ivec2(0);
+
+    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
+    for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
+        float random = random_uniform(state);
+        vec4 regionImportance = getNodeImportance(currPos, mipLevel);
+        int region = getRegion(regionImportance, random);
+
+        if (region == 0) {
+            // Top left quadrant
+            currPos = 2 * currPos;
+        }
+        else if (region == 1) {
+            // Top right quadrant
+            currPos = 2 * (currPos + ivec2(1, 0));
+        }
+        else if (region == 2) {
+            // Bottom left quadrant
+            currPos = 2 * (currPos + ivec2(0, 1));
+        } else {
+            // Bottom right quadrant
+            currPos = 2 * (currPos + ivec2(1, 1));
+        }
+    }
+
+    oPositionRender = (vec2(currPos - frameSizeHalf) / vec2(frameSizeHalf)); 
+}
+
 // #part /glsl/shaders/renderers/FOVEATED/integrate/vertex
 
 #version 300 es
@@ -128,12 +230,12 @@ precision mediump sampler3D;
 
 @unprojectRand
 
-uniform sampler2D uFrame;
-
 uniform sampler2D uPosition;
 uniform sampler2D uDirection;
 uniform sampler2D uTransmittance;
 uniform sampler2D uRadiance;
+
+uniform sampler2D uRandomPosition;
 
 uniform sampler3D uVolume;
 uniform sampler2D uTransferFunction;
@@ -143,7 +245,7 @@ uniform mat4 uMvpInverseMatrix;
 uniform vec2 uInverseResolution;
 uniform float uBlur;
 
-uniform float uRandSeed2;
+uniform float uRandSeed;
 
 uniform float uExtinction;
 uniform float uAnisotropy;
@@ -156,7 +258,6 @@ layout (location = 0) out vec4 oPosition;
 layout (location = 1) out vec4 oDirection;
 layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
-layout (location = 4) out vec2 oPositionNormalized;
 
 void resetPhoton(inout uint state, in vec2 position, inout Photon photon) {
     vec3 from, to;
@@ -204,35 +305,6 @@ float mean3(vec3 v) {
     return dot(v, vec3(1.0 / 3.0));
 }
 
-// Random sampling
-vec4 getNodeImportance(ivec2 pos, int mipLevel){
-    float i1 = texelFetch(uFrame, pos, mipLevel).r;
-    float i2 = texelFetch(uFrame, pos + ivec2(1, 0), mipLevel).r;
-    float i3 = texelFetch(uFrame, pos + ivec2(0, 1), mipLevel).r;
-    float i4 = texelFetch(uFrame, pos + ivec2(1, 1), mipLevel).r;
-    float sum = i1 + i2 + i3 + i4;
-
-    if (abs(sum) < 0.001) {
-        return vec4(0.25);
-    }
-
-    return vec4(i1 / sum, i2 / sum, i3 / sum, i4 / sum);
-}
-
-int getRegion(vec4 regionImportance, float random) {
-    float cumulativeProbability = 0.0;
-
-    for (int i = 0; i < 4; i++) {
-        cumulativeProbability += regionImportance[i];
-        if (random <= cumulativeProbability) {
-            return i;
-        }
-    }
-
-    return 0; // Unreachable...
-}
-///
-
 void main() {
     Photon photon;
     vec2 mappedPosition = vPosition * 0.5 + 0.5;
@@ -244,41 +316,9 @@ void main() {
     vec4 radianceAndSamples = texture(uRadiance, mappedPosition);
     photon.radiance = radianceAndSamples.rgb;
     photon.samples = uint(radianceAndSamples.w + 0.5);
+    vec2 randomPosition = texture(uRandomPosition, mappedPosition).xy;
 
-    ivec2 frameSize = textureSize(uFrame, 0);
-    ivec2 frameSizeHalf = frameSize / 2;
-    int maxMipLevel = int(log2(float(frameSizeHalf.x)));
-
-    //// Random sampling
-    ivec2 currPos = ivec2(0);
-    uint state2 = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed2)));
-    for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
-        float random = random_uniform(state2);
-        vec4 regionImportance = getNodeImportance(currPos, mipLevel);
-        int region = getRegion(regionImportance, random);
-
-        if (region == 0) {
-            // Top left quadrant
-            currPos = 2 * currPos;
-        }
-        else if (region == 1) {
-            // Top right quadrant
-            currPos = 2 * (currPos + ivec2(1, 0));
-        }
-        else if (region == 2) {
-            // Bottom left quadrant
-            currPos = 2 * (currPos + ivec2(0, 1));
-        } else {
-            // Bottom right quadrant
-            currPos = 2 * (currPos + ivec2(1, 1));
-        }
-    }
-
-    vec2 randomPosition= (vec2(currPos - frameSizeHalf) / vec2(frameSizeHalf));
-    oPositionNormalized = randomPosition * 0.5 + 0.5;
-    ////
-
-    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed2)));
+    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
     for (uint i = 0u; i < uSteps; i++) {
         float dist = random_exponential(state, uExtinction);
         photon.position += dist * photon.direction;
@@ -331,23 +371,21 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uColor;
-uniform sampler2D uRandomPositionNormalized;
+uniform sampler2D uRandomPosition;
 
 out vec2 vPosition;
 
 void main() {
-    ivec2 texSize = textureSize(uColor, 0);
+    ivec2 texSize = textureSize(uRandomPosition, 0);
     float y = float(gl_VertexID / texSize.x) / float(texSize.y);
     float x = float(gl_VertexID % texSize.x) / float(texSize.x);
 
     vec2 positionNormalized = vec2(x, y);
-    vec2 randomPositionNorm = texture(uRandomPositionNormalized, positionNormalized).xy;
+    vec2 randomPosition = texture(uRandomPosition, positionNormalized).xy;
 
     vPosition = positionNormalized;
 
-    vec2 gridPosition = randomPositionNorm * 2.0 - 1.0;
-    gl_Position = vec4(gridPosition, 0, 1);
+    gl_Position = vec4(randomPosition, 0, 1);
     gl_PointSize = 2.0;
 }
 
