@@ -122,10 +122,9 @@ export class FoveatedRenderer extends AbstractRenderer {
         this._frameBuffer.use();
         this._generateFrame();
 
+        // Compute photon positions using MIP output & MipMap
         this._computeBuffer.use();
         this._computePosition();
-
-        // TODO: Sample entire environmental map here (to get the white background)
 
         this._accumulationBuffer.use();
         this._resetFrameAccumulation();
@@ -314,8 +313,12 @@ export class FoveatedRenderer extends AbstractRenderer {
     _resetFrameRender() {
         const gl = this._gl;
 
-        const { program } = this._programs.resetRender;
+        const { program, uniforms } = this._programs.resetRender;
         gl.useProgram(program);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this._environmentTexture);
+        gl.uniform1i(uniforms.uEnvironment, 0);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }

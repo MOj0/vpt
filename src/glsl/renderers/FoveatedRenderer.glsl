@@ -455,7 +455,7 @@ layout (location = 0) out vec4 oPosition;
 layout (location = 1) out vec4 oDirection;
 layout (location = 2) out vec4 oTransmittance;
 layout (location = 3) out vec4 oRadiance;
-layout (location = 4) out vec2 oPositionNormalized;
+layout (location = 4) out vec2 oPositionRender;
 
 void main() {
     Photon photon;
@@ -473,7 +473,7 @@ void main() {
     oDirection = vec4(photon.direction, float(photon.bounces));
     oTransmittance = vec4(photon.transmittance, 0);
     oRadiance = vec4(photon.radiance, float(photon.samples));
-    oPositionNormalized = vec2(0);
+    oPositionRender = vec2(0);
 }
 
 
@@ -491,6 +491,7 @@ out vec2 vPosition;
 
 void main() {
     vec2 position = vertices[gl_VertexID];
+    vPosition = position * 0.5 + 0.5;
     gl_Position = vec4(position, 0, 1);
 }
 
@@ -500,8 +501,13 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
+uniform sampler2D uEnvironment;
+
+in vec2 vPosition;
+
 out vec4 oColor;
 
 void main() {
-    oColor = vec4(vec3(0), 1);
+    vec3 env = texture(uEnvironment, vPosition).rgb;
+    oColor = vec4(env, 1);
 }
