@@ -188,66 +188,66 @@ void main() {
     //     }
     // }
 
-    /////
-    // ivec2 frameSize = textureSize(uFrame, 0);
-    // ivec2 frameSizeHalf = frameSize / 2;
-    // // int maxMipLevel = int(log2(float(frameSizeHalf.x)));
-    // int maxMipLevel = 8;
-    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
-
-    // ivec2 currPos = ivec2(0);
-    // for (int mipLevel = maxMipLevel; mipLevel > maxMipLevel - 1; mipLevel--) {
-    //     float random = random_uniform(state);
-    //     // vec4 regionImportance = getNodeImportance(currPos, mipLevel);
-    //     vec4 regionImportance = vec4(0.25);
-    //     int region = getRegion(regionImportance, random);
-
-    //     if (region == 0) {
-    //         // Top left quadrant
-    //         currPos = 2 * currPos;
-    //     }
-    //     else if (region == 1) {
-    //         // Top right quadrant
-    // TODO: Multply by 2 first, then add
-    //         currPos = 2 * (currPos + ivec2(1, 0));
-    //     }
-    //     else if (region == 2) {
-    //         // Bottom left quadrant
-    //         currPos = 2 * (currPos + ivec2(0, 1));
-    //     } else {
-    //         // Bottom right quadrant
-    //         currPos = 2 * (currPos + ivec2(1, 1));
-    //     }
-    // }
-    // oPositionRender = (vec2(currPos - ivec2(1)) / vec2(1));
-    /////
-
-    /////
+    // /////
     uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
-    int maxDepth = 8;
-    int maxCoord = int(pow(2.0, float(maxDepth))) - 1;
-    float maxHalf = float(maxCoord) / 2.0;
+    ivec2 frameSize = ivec2(512);
+    int maxMipLevel = int(log2(float(frameSize.x / 2)));
+    int maxCoord = frameSize.x - 1;
+    vec2 maxCoordHalf = vec2(float(maxCoord) / 2.0);
 
     ivec2 currPos = ivec2(0);
-    for(int depth = maxDepth; depth > 0; depth--){
+    for(int level = maxMipLevel; level > 0; level--) {
         float random = random_uniform(state);
-        vec4 regionImportance = getNodeImportance(currPos, depth);
+        vec4 regionImportance = getNodeImportance(currPos, level);
         int region = getRegion(regionImportance, random);
 
-        if (region == 0){
+        if (region == 0) {
+            // Top left quadrant
             currPos = 2 * currPos;
-        } else if(region == 1){
-            currPos = 2 * currPos + ivec2(1, 0);
-        }  else if(region == 2){
-            currPos = 2 * currPos + ivec2(0, 1);
+        }
+        else if (region == 1) {
+            // Top right quadrant
+            currPos = 2 * (currPos + ivec2(1, 0));
+        }
+        else if (region == 2) {
+            // Bottom left quadrant
+            currPos = 2 * (currPos + ivec2(0, 1));
         } else {
-            currPos = 2 * currPos + ivec2(1, 1);
+            // Bottom right quadrant
+            currPos = 2 * (currPos + ivec2(1, 1));
         }
     }
 
-    vec2 newPos = (vec2(currPos) - vec2(maxHalf)) / vec2(maxHalf);
-    // newPos.y = -newPos.y;
+    vec2 newPos = (vec2(currPos) - maxCoordHalf) / maxCoordHalf;
     oPositionRender = newPos;
+    // /////
+
+    /////
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+    // int maxDepth = 8;
+    // int maxCoord = int(pow(2.0, float(maxDepth))) - 1;
+    // float maxHalf = float(maxCoord) / 2.0;
+
+    // ivec2 currPos = ivec2(0);
+    // for(int depth = maxDepth; depth > 0; depth--){
+    //     float random = random_uniform(state);
+    //     vec4 regionImportance = getNodeImportance(currPos, depth);
+    //     int region = getRegion(regionImportance, random);
+
+    //     if (region == 0){
+    //         currPos = 2 * currPos;
+    //     } else if(region == 1){
+    //         currPos = 2 * currPos + ivec2(1, 0);
+    //     }  else if(region == 2){
+    //         currPos = 2 * currPos + ivec2(0, 1);
+    //     } else {
+    //         currPos = 2 * currPos + ivec2(1, 1);
+    //     }
+    // }
+
+    // vec2 newPos = (vec2(currPos) - vec2(maxHalf)) / vec2(maxHalf);
+    // // newPos.y = -newPos.y;
+    // oPositionRender = newPos;
 
     /////
     // /////
@@ -366,26 +366,25 @@ uniform sampler2D uRenderPosition;
 out vec2 vPosition;
 
 void main() {
-    // ivec2 texSize = textureSize(uRenderPosition, 0);
-    // int y = gl_VertexID / texSize.x;
-    // int x = gl_VertexID % texSize.x;
-    // vec2 renderPosition = texelFetch(uRenderPosition, ivec2(x, y), 0).xy;
-
-    // vPosition = renderPosition;
-
-    // gl_Position = vec4(renderPosition, 0, 1);
-    // gl_PointSize = 1.0;
-    // ivec2 texSize = textureSize(uRenderPosition, 0);
-
     ivec2 texSize = textureSize(uRenderPosition, 0);
-    float y = float(gl_VertexID / texSize.x) / float(texSize.y - 1);
-    float x = float(gl_VertexID % texSize.x) / float(texSize.x);
-    vec2 renderPosition = texture(uRenderPosition, vec2(x, y)).xy;
+    int y = gl_VertexID / texSize.x;
+    int x = gl_VertexID % texSize.x;
+    vec2 renderPosition = texelFetch(uRenderPosition, ivec2(x, y), 0).xy;
 
     vPosition = renderPosition;
 
     gl_Position = vec4(renderPosition, 0, 1);
     gl_PointSize = 1.0;
+
+    // ivec2 texSize = textureSize(uRenderPosition, 0);
+    // float y = float(gl_VertexID / texSize.x) / float(texSize.y - 1);
+    // float x = float(gl_VertexID % texSize.x) / float(texSize.x);
+    // vec2 renderPosition = texture(uRenderPosition, vec2(x, y)).xy;
+
+    // vPosition = renderPosition;
+
+    // gl_Position = vec4(renderPosition, 0, 1);
+    // gl_PointSize = 1.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/integrate/fragment
