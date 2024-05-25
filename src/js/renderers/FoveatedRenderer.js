@@ -191,41 +191,36 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.useProgram(program);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this._frameBuffer.getAttachments().color[0]);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.uniform1i(uniforms.uFrame, 0);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uPosition, 0);
 
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uPosition, 1);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
+        gl.uniform1i(uniforms.uDirection, 1);
 
         gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[1]);
-        gl.uniform1i(uniforms.uDirection, 2);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[2]);
+        gl.uniform1i(uniforms.uTransmittance, 2);
 
         gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[2]);
-        gl.uniform1i(uniforms.uTransmittance, 3);
+        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
+        gl.uniform1i(uniforms.uRadiance, 3);
 
         gl.activeTexture(gl.TEXTURE4);
-        gl.bindTexture(gl.TEXTURE_2D, this._accumulationBuffer.getAttachments().color[3]);
-        gl.uniform1i(uniforms.uRadiance, 4);
+        gl.bindTexture(gl.TEXTURE_2D, this._computeBuffer.getAttachments().color[0]);
+        gl.uniform1i(uniforms.uRandomPosition, 4);
 
         gl.activeTexture(gl.TEXTURE5);
-        gl.bindTexture(gl.TEXTURE_2D, this._computeBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uRandomPosition, 5);
+        gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
+        gl.uniform1i(uniforms.uVolume, 5);
 
         gl.activeTexture(gl.TEXTURE6);
-        gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
-        gl.uniform1i(uniforms.uVolume, 6);
+        gl.bindTexture(gl.TEXTURE_2D, this._environmentTexture);
+        gl.uniform1i(uniforms.uEnvironment, 6);
 
         gl.activeTexture(gl.TEXTURE7);
-        gl.bindTexture(gl.TEXTURE_2D, this._environmentTexture);
-        gl.uniform1i(uniforms.uEnvironment, 7);
-
-        gl.activeTexture(gl.TEXTURE8);
         gl.bindTexture(gl.TEXTURE_2D, this._transferFunction);
-        gl.uniform1i(uniforms.uTransferFunction, 8);
+        gl.uniform1i(uniforms.uTransferFunction, 7);
 
         gl.uniform2f(uniforms.uInverseResolution, 1 / this._resolution, 1 / this._resolution);
         gl.uniform1f(uniforms.uBlur, 0);
@@ -330,9 +325,9 @@ export class FoveatedRenderer extends AbstractRenderer {
             height: this._resolution,
             min: gl.NEAREST,
             mag: gl.NEAREST,
-            format: gl.RGBA,
-            iformat: gl.RGBA32F,
-            type: gl.FLOAT,
+            format: gl.RED,
+            iformat: gl.R8,
+            type: gl.UNSIGNED_BYTE,
         }];
     }
 
