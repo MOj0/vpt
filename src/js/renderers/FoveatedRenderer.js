@@ -106,6 +106,10 @@ export class FoveatedRenderer extends AbstractRenderer {
     }
 
     render() {
+        // Compute photon positions using MIP output & MipMap
+        this._computeBuffer.use();
+        this._computePosition();
+
         this._accumulationBuffer.use();
         this._integrateFrame();
         this._accumulationBuffer.swap();
@@ -121,10 +125,6 @@ export class FoveatedRenderer extends AbstractRenderer {
         // MIP renderer only needs to get invoked when the state changes
         this._frameBuffer.use();
         this._generateFrame();
-
-        // Compute photon positions using MIP output & MipMap
-        this._computeBuffer.use();
-        this._computePosition();
 
         this._accumulationBuffer.use();
         this._resetFrameAccumulation();
@@ -326,8 +326,8 @@ export class FoveatedRenderer extends AbstractRenderer {
             min: gl.NEAREST,
             mag: gl.NEAREST,
             format: gl.RED,
-            iformat: gl.R8,
-            type: gl.UNSIGNED_BYTE,
+            iformat: gl.R32F,
+            type: gl.FLOAT,
         }];
     }
 

@@ -154,11 +154,9 @@ void main() {
     ivec2 frameSize = textureSize(uFrame, 0);
     ivec2 frameSizeHalf = frameSize / 2;
     int maxMipLevel = int(log2(float(frameSizeHalf.x)));
+    uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
 
-    vec2 mappedPosition = vPosition * 0.5 + 0.5;
     ivec2 currPos = ivec2(0);
-
-    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
     for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
         float random = random_uniform(state);
         vec4 regionImportance = getNodeImportance(currPos, mipLevel);
@@ -508,6 +506,7 @@ in vec2 vPosition;
 out vec4 oColor;
 
 void main() {
-    vec3 env = texture(uEnvironment, vPosition).rgb;
-    oColor = vec4(env, 1);
+    // vec3 env = texture(uEnvironment, vPosition).rgb;
+    // oColor = vec4(env, 1);
+    oColor = vec4(vec3(0), 1);
 }
