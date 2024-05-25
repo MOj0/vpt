@@ -182,6 +182,7 @@ export class FoveatedRenderer extends AbstractRenderer {
         gl.uniform1f(uniforms.uRandSeed, Math.random());
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // gl.drawArrays(gl.POINTS, 0, 512 * 512);
     }
 
     _integrateFrame() {
@@ -208,7 +209,7 @@ export class FoveatedRenderer extends AbstractRenderer {
 
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, this._computeBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uRandomPosition, 4);
+        gl.uniform1i(uniforms.uRenderPosition, 4);
 
         gl.activeTexture(gl.TEXTURE5);
         gl.bindTexture(gl.TEXTURE_3D, this._volume.getTexture());
@@ -251,7 +252,8 @@ export class FoveatedRenderer extends AbstractRenderer {
             gl.COLOR_ATTACHMENT3,
         ]);
 
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.drawArrays(gl.POINTS, 0, this._resolution * this._resolution);
     }
 
     _renderFrame() {
@@ -266,7 +268,7 @@ export class FoveatedRenderer extends AbstractRenderer {
 
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, this._computeBuffer.getAttachments().color[0]);
-        gl.uniform1i(uniforms.uRandomPosition, 1);
+        gl.uniform1i(uniforms.uRenderPosition, 1);
 
         gl.drawArrays(gl.POINTS, 0, this._resolution * this._resolution);
     }

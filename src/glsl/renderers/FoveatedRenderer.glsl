@@ -98,6 +98,14 @@ void main() {
     vec2 position = vertices[gl_VertexID];
     vPosition = position;
     gl_Position = vec4(position, 0, 1);
+
+    // ivec2 texSize = ivec2(512);
+    // float y = float(gl_VertexID / texSize.x) / float(texSize.y - 1);
+    // float x = float(gl_VertexID % texSize.x) / float(texSize.x);
+    // vec2 position = vec2(x, y) * 2.0 - 1.0;
+
+    // vPosition = position;
+    // gl_Position = vec4(position, 0, 1);
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/compute/fragment
@@ -151,35 +159,199 @@ int getRegion(vec4 regionImportance, float random) {
 
 // Random sampling
 void main() {
-    ivec2 frameSize = textureSize(uFrame, 0);
-    ivec2 frameSizeHalf = frameSize / 2;
-    int maxMipLevel = int(log2(float(frameSizeHalf.x)));
+    // ivec2 frameSize = textureSize(uFrame, 0);
+    // ivec2 frameSizeHalf = frameSize / 2;
+    // int maxMipLevel = int(log2(float(frameSizeHalf.x)));
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+
+    // ivec2 currPos = ivec2(0);
+    // for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
+    //     float random = random_uniform(state);
+    //     // vec4 regionImportance = getNodeImportance(currPos, mipLevel);
+    //     vec4 regionImportance = vec4(0.25);
+    //     int region = getRegion(regionImportance, random);
+
+    //     if (region == 0) {
+    //         // Top left quadrant
+    //         currPos = 2 * currPos;
+    //     }
+    //     else if (region == 1) {
+    //         // Top right quadrant
+    //         currPos = 2 * (currPos + ivec2(1, 0));
+    //     }
+    //     else if (region == 2) {
+    //         // Bottom left quadrant
+    //         currPos = 2 * (currPos + ivec2(0, 1));
+    //     } else {
+    //         // Bottom right quadrant
+    //         currPos = 2 * (currPos + ivec2(1, 1));
+    //     }
+    // }
+
+    /////
+    // ivec2 frameSize = textureSize(uFrame, 0);
+    // ivec2 frameSizeHalf = frameSize / 2;
+    // // int maxMipLevel = int(log2(float(frameSizeHalf.x)));
+    // int maxMipLevel = 8;
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+
+    // ivec2 currPos = ivec2(0);
+    // for (int mipLevel = maxMipLevel; mipLevel > maxMipLevel - 1; mipLevel--) {
+    //     float random = random_uniform(state);
+    //     // vec4 regionImportance = getNodeImportance(currPos, mipLevel);
+    //     vec4 regionImportance = vec4(0.25);
+    //     int region = getRegion(regionImportance, random);
+
+    //     if (region == 0) {
+    //         // Top left quadrant
+    //         currPos = 2 * currPos;
+    //     }
+    //     else if (region == 1) {
+    //         // Top right quadrant
+    // TODO: Multply by 2 first, then add
+    //         currPos = 2 * (currPos + ivec2(1, 0));
+    //     }
+    //     else if (region == 2) {
+    //         // Bottom left quadrant
+    //         currPos = 2 * (currPos + ivec2(0, 1));
+    //     } else {
+    //         // Bottom right quadrant
+    //         currPos = 2 * (currPos + ivec2(1, 1));
+    //     }
+    // }
+    // oPositionRender = (vec2(currPos - ivec2(1)) / vec2(1));
+    /////
+
+    /////
     uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+    int maxDepth = 8;
+    int maxCoord = int(pow(2.0, float(maxDepth))) - 1;
+    float maxHalf = float(maxCoord) / 2.0;
 
     ivec2 currPos = ivec2(0);
-    for (int mipLevel = maxMipLevel; mipLevel > 0; mipLevel--) {
+    for(int depth = maxDepth; depth > 0; depth--){
         float random = random_uniform(state);
-        vec4 regionImportance = getNodeImportance(currPos, mipLevel);
+        vec4 regionImportance = getNodeImportance(currPos, depth);
         int region = getRegion(regionImportance, random);
 
-        if (region == 0) {
-            // Top left quadrant
+        if (region == 0){
             currPos = 2 * currPos;
-        }
-        else if (region == 1) {
-            // Top right quadrant
-            currPos = 2 * (currPos + ivec2(1, 0));
-        }
-        else if (region == 2) {
-            // Bottom left quadrant
-            currPos = 2 * (currPos + ivec2(0, 1));
+        } else if(region == 1){
+            currPos = 2 * currPos + ivec2(1, 0);
+        }  else if(region == 2){
+            currPos = 2 * currPos + ivec2(0, 1);
         } else {
-            // Bottom right quadrant
-            currPos = 2 * (currPos + ivec2(1, 1));
+            currPos = 2 * currPos + ivec2(1, 1);
         }
     }
 
-    oPositionRender = (vec2(currPos - frameSizeHalf) / vec2(frameSizeHalf)); 
+    vec2 newPos = (vec2(currPos) - vec2(maxHalf)) / vec2(maxHalf);
+    // newPos.y = -newPos.y;
+    oPositionRender = newPos;
+
+    /////
+    // /////
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+
+    // ivec2 currPos = ivec2(0);
+    // float random = random_uniform(state);
+    // vec4 regionImportance = getNodeImportance(currPos, 8);
+    // int region = getRegion(regionImportance, random);
+
+    // if (region == 0){
+    //     currPos = 2 * currPos;
+    // } else if(region == 1){
+    //     currPos = 2 * currPos + ivec2(1, 0);
+    // }  else if(region == 2){
+    //     currPos = 2 * currPos + ivec2(0, 1);
+    // } else {
+    //     currPos = 2 * currPos + ivec2(1, 1);
+    // }
+
+    // int depth = 1;
+    // int maxCoord = int(pow(2.0, float(depth))) - 1;
+    // float maxHalf = float(maxCoord) / 2.0;
+
+    // vec2 newPos = (vec2(currPos) - vec2(maxHalf)) / vec2(maxHalf);
+    // newPos.y = -newPos.y;
+    // newPos = newPos * 0.65;
+    // oPositionRender = newPos;
+    // /////
+
+    /////
+    // int depth = 4;
+    // int maxCoord = int(pow(2.0, float(depth))) - 1;
+    // float maxHalf = float(maxCoord) / 2.0;
+    // ivec2 currPos = ivec2(0);
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+    // float random = random_uniform(state);
+    // vec2 pos = vec2(0);
+    // if (random < 0.25){
+    //     currPos = ivec2(0, 0);
+    //     pos = vec2(-1, 1);
+    // } else if (random < 0.5){
+    //     currPos = ivec2(maxCoord, 0);
+    //     pos = vec2(1, 1);
+    // } else if (random < 0.75){
+    //     currPos = ivec2(0, maxCoord);
+    //     pos = vec2(-1, -1);
+    // } else {
+    //     currPos = ivec2(maxCoord, maxCoord);
+    //     pos = vec2(1, -1);
+    // }
+    // vec2 newPos = (vec2(currPos) - vec2(maxHalf)) / vec2(maxHalf);
+    // newPos.y = -newPos.y;
+    // newPos = newPos * 0.65;
+    // oPositionRender = newPos;
+
+    // // currPos = currPos + ivec2(-1, -1);
+    // // currPos.y = -currPos.y;
+    // // vec2 newPos = vec2(currPos) * 0.65;
+    // // oPositionRender = pos * 0.65;
+    ////
+
+    //////
+    // vec2 position = vec2(0.0);
+    // int max_levels = 7;
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+
+    // ivec2 currPos = ivec2(0);
+    // for (int depth = 1; depth <= max_levels; depth++) {
+    //     float random = random_uniform(state);
+    //     // vec4 regionImportance = getNodeImportance(currPos, depth);
+    //     vec4 regionImportance = vec4(0.25);
+    //     int region = getRegion(regionImportance, random);
+
+    //     if (region == 0) {
+    //         // Top left quadrant
+    //         position = position + vec2(-1.0, 1.0) * pow(0.5, float(depth));
+    //     }
+    //     else if (region == 1) {
+    //         // Top right quadrant
+    //         position = position + vec2(1.0, 1.0) * pow(0.5, float(depth));
+    //     }
+    //     else if (region == 2) {
+    //         // Bottom left quadrant
+    //         position = position + vec2(-1.0, -1.0) * pow(0.5, float(depth));
+    //     } else {
+    //         // Bottom right quadrant
+    //         position = position + vec2(1.0, -1.0) * pow(0.5, float(depth));
+    //     }
+    // }
+
+    // float rand_dirX = random_uniform(state);
+    // float rand_dirY = random_uniform(state);
+    // vec2 rand_dir = vec2(rand_dirX, rand_dirY) * 0.1 - 0.05;
+    // position = position + rand_dir * pow(0.5, float(max_levels + 1));
+    // oPositionRender = position;
+    ///////
+
+    // oPositionRender = (vec2(currPos - frameSizeHalf) / vec2(frameSizeHalf));
+    // oPositionRender = vec2(0.2, 0.3);
+    // uint state = hash(uvec3(floatBitsToUint(vPosition.x), floatBitsToUint(vPosition.y), floatBitsToUint(uRandSeed)));
+    // float randX = random_uniform(state);
+    // float randY = random_uniform(state);
+    // oPositionRender = vec2(randX, randY) * 2.0 - 1.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/integrate/vertex
@@ -189,18 +361,31 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-const vec2 vertices[] = vec2[](
-    vec2(-1, -1),
-    vec2( 3, -1),
-    vec2(-1,  3)
-);
+uniform sampler2D uRenderPosition;
 
 out vec2 vPosition;
 
 void main() {
-    vec2 position = vertices[gl_VertexID];
-    vPosition = position;
-    gl_Position = vec4(position, 0, 1);
+    // ivec2 texSize = textureSize(uRenderPosition, 0);
+    // int y = gl_VertexID / texSize.x;
+    // int x = gl_VertexID % texSize.x;
+    // vec2 renderPosition = texelFetch(uRenderPosition, ivec2(x, y), 0).xy;
+
+    // vPosition = renderPosition;
+
+    // gl_Position = vec4(renderPosition, 0, 1);
+    // gl_PointSize = 1.0;
+    // ivec2 texSize = textureSize(uRenderPosition, 0);
+
+    ivec2 texSize = textureSize(uRenderPosition, 0);
+    float y = float(gl_VertexID / texSize.x) / float(texSize.y - 1);
+    float x = float(gl_VertexID % texSize.x) / float(texSize.x);
+    vec2 renderPosition = texture(uRenderPosition, vec2(x, y)).xy;
+
+    vPosition = renderPosition;
+
+    gl_Position = vec4(renderPosition, 0, 1);
+    gl_PointSize = 1.0;
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/integrate/fragment
@@ -232,8 +417,6 @@ uniform sampler2D uPosition;
 uniform sampler2D uDirection;
 uniform sampler2D uTransmittance;
 uniform sampler2D uRadiance;
-
-uniform sampler2D uRandomPosition;
 
 uniform sampler3D uVolume;
 uniform sampler2D uTransferFunction;
@@ -304,6 +487,63 @@ float mean3(vec3 v) {
 }
 
 void main() {
+    // Photon photon;
+    // vec2 mappedPosition = vPosition * 0.5 + 0.5;
+    // photon.position = texture(uPosition, mappedPosition).xyz;
+    // vec4 directionAndBounces = texture(uDirection, mappedPosition);
+    // photon.direction = directionAndBounces.xyz;
+    // photon.bounces = uint(directionAndBounces.w + 0.5);
+    // photon.transmittance = texture(uTransmittance, mappedPosition).rgb;
+    // vec4 radianceAndSamples = texture(uRadiance, mappedPosition);
+    // photon.radiance = radianceAndSamples.rgb;
+    // photon.samples = uint(radianceAndSamples.w + 0.5);
+
+    // uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
+    // for (uint i = 0u; i < uSteps; i++) {
+    //     float dist = random_exponential(state, uExtinction);
+    //     photon.position += dist * photon.direction;
+
+    //     vec4 volumeSample = sampleVolumeColor(photon.position);
+
+    //     float PNull = 1.0 - volumeSample.a;
+    //     float PScattering;
+    //     if (photon.bounces >= uMaxBounces) {
+    //         PScattering = 0.0;
+    //     } else {
+    //         PScattering = volumeSample.a * max3(volumeSample.rgb);
+    //     }
+    //     float PAbsorption = 1.0 - PNull - PScattering;
+
+    //     float fortuneWheel = random_uniform(state);
+    //     if (any(greaterThan(photon.position, vec3(1))) || any(lessThan(photon.position, vec3(0)))) {
+    //         // out of bounds
+    //         vec4 envSample = sampleEnvironmentMap(photon.direction);
+    //         vec3 radiance = photon.transmittance * envSample.rgb;
+    //         photon.samples++;
+    //         photon.radiance += (radiance - photon.radiance) / float(photon.samples);
+    //         resetPhoton(state, vPosition, photon);
+    //     } else if (fortuneWheel < PAbsorption) {
+    //         // absorption
+    //         vec3 radiance = vec3(0);
+    //         photon.samples++;
+    //         photon.radiance += (radiance - photon.radiance) / float(photon.samples);
+    //         resetPhoton(state, vPosition, photon);
+    //     } else if (fortuneWheel < PAbsorption + PScattering) {
+    //         // scattering
+    //         photon.transmittance *= volumeSample.rgb;
+    //         photon.direction = sampleHenyeyGreenstein(state, uAnisotropy, photon.direction);
+    //         photon.bounces++;
+    //     } else {
+    //         // null collision
+    //     }
+    // }
+
+    // oPosition = vec4(photon.position, 0);
+    // oDirection = vec4(photon.direction, float(photon.bounces));
+    // oTransmittance = vec4(photon.transmittance, 0);
+    // oRadiance = vec4(photon.radiance, float(photon.samples));
+
+
     Photon photon;
     vec2 mappedPosition = vPosition * 0.5 + 0.5;
     photon.position = texture(uPosition, mappedPosition).xyz;
@@ -314,52 +554,13 @@ void main() {
     vec4 radianceAndSamples = texture(uRadiance, mappedPosition);
     photon.radiance = radianceAndSamples.rgb;
     photon.samples = uint(radianceAndSamples.w + 0.5);
-    vec2 randomPosition = texture(uRandomPosition, mappedPosition).xy;
 
-    uint state = hash(uvec3(floatBitsToUint(mappedPosition.x), floatBitsToUint(mappedPosition.y), floatBitsToUint(uRandSeed)));
-    for (uint i = 0u; i < uSteps; i++) {
-        float dist = random_exponential(state, uExtinction);
-        photon.position += dist * photon.direction;
-
-        vec4 volumeSample = sampleVolumeColor(photon.position);
-
-        float PNull = 1.0 - volumeSample.a;
-        float PScattering;
-        if (photon.bounces >= uMaxBounces) {
-            PScattering = 0.0;
-        } else {
-            PScattering = volumeSample.a * max3(volumeSample.rgb);
-        }
-        float PAbsorption = 1.0 - PNull - PScattering;
-
-        float fortuneWheel = random_uniform(state);
-        if (any(greaterThan(photon.position, vec3(1))) || any(lessThan(photon.position, vec3(0)))) {
-            // out of bounds
-            vec4 envSample = sampleEnvironmentMap(photon.direction);
-            vec3 radiance = photon.transmittance * envSample.rgb;
-            photon.samples++;
-            photon.radiance += (radiance - photon.radiance) / float(photon.samples);
-            resetPhoton(state, randomPosition, photon);
-        } else if (fortuneWheel < PAbsorption) {
-            // absorption
-            vec3 radiance = vec3(0);
-            photon.samples++;
-            photon.radiance += (radiance - photon.radiance) / float(photon.samples);
-            resetPhoton(state, randomPosition, photon);
-        } else if (fortuneWheel < PAbsorption + PScattering) {
-            // scattering
-            photon.transmittance *= volumeSample.rgb;
-            photon.direction = sampleHenyeyGreenstein(state, uAnisotropy, photon.direction);
-            photon.bounces++;
-        } else {
-            // null collision
-        }
-    }
-
-    oPosition = vec4(photon.position, 0);
-    oDirection = vec4(photon.direction, float(photon.bounces));
-    oTransmittance = vec4(photon.transmittance, 0);
-    oRadiance = vec4(photon.radiance, float(photon.samples));
+    oPosition = vec4(0);
+    oDirection = vec4(0);
+    oTransmittance = vec4(0);
+    oRadiance = vec4(photon.radiance + 0.01, 1);
+    // oRadiance = vec4(radianceAndSamples.r + 0.01, mappedPosition, 1);
+    // oRadiance = vec4(radianceAndSamples.r + 0.01, 0.2, 0.2, 1);
 }
 
 // #part /glsl/shaders/renderers/FOVEATED/render/vertex
@@ -369,21 +570,30 @@ void main() {
 precision mediump float;
 precision mediump sampler2D;
 
-uniform sampler2D uRandomPosition;
+uniform sampler2D uRenderPosition;
 
 out vec2 vPosition;
 
 void main() {
-    ivec2 texSize = textureSize(uRandomPosition, 0);
+    // ivec2 texSize = textureSize(uRenderPosition, 0);
+    // int y = gl_VertexID / texSize.x;
+    // int x = gl_VertexID % texSize.x;
+    // vec2 renderPosition = texelFetch(uRenderPosition, ivec2(x, y), 0).xy;
+
+    // vPosition = renderPosition * 0.5 + 0.5;
+
+    // gl_Position = vec4(renderPosition, 0, 1);
+    // gl_PointSize = 2.0;
+
+
+    ivec2 texSize = textureSize(uRenderPosition, 0);
     float y = float(gl_VertexID / texSize.x) / float(texSize.y);
     float x = float(gl_VertexID % texSize.x) / float(texSize.x);
+    vec2 renderPosition = texture(uRenderPosition, vec2(x, y)).xy;
 
-    vec2 positionNormalized = vec2(x, y);
-    vec2 randomPosition = texture(uRandomPosition, positionNormalized).xy;
+    vPosition = renderPosition * 0.5 + 0.5;
 
-    vPosition = positionNormalized;
-
-    gl_Position = vec4(randomPosition, 0, 1);
+    gl_Position = vec4(renderPosition, 0, 1);
     gl_PointSize = 2.0;
 }
 
@@ -470,7 +680,8 @@ void main() {
     oPosition = vec4(photon.position, 0);
     oDirection = vec4(photon.direction, float(photon.bounces));
     oTransmittance = vec4(photon.transmittance, 0);
-    oRadiance = vec4(photon.radiance, float(photon.samples));
+    // oRadiance = vec4(photon.radiance, float(photon.samples));
+    oRadiance = vec4(0, 0, 0, 0);
     oPositionRender = vec2(0);
 }
 
